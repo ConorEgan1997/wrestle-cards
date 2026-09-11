@@ -109,12 +109,15 @@ function tag(text, className) {
  * Game
  * ------------------------------------------------------------------ */
 
-/** How long a play stays on everyone's screen before it fades out. */
-export const ANNOUNCE_MS = 9000;
+/** How long the full-screen reveal holds before dropping to the banner. */
+export const FLASH_MS = 4500;
+/** How long the banner then lingers. */
+export const ANNOUNCE_MS = 12000;
 
 export function renderGame(view, handlers) {
   renderHud(view);
   renderAnnounce(view);
+  renderPending(view);
   renderBanners(view);
   renderTimer(view, handlers);
   renderDrinks(view);
@@ -143,8 +146,11 @@ export function renderAnnounce(view) {
   const slot = document.getElementById('announce');
   if (!slot) return;
   const play = view?.lastPlay;
+  const age = play ? hostNow() - play.at : Infinity;
 
-  if (!play || hostNow() - play.at > ANNOUNCE_MS) {
+  renderFlash(play, age);
+
+  if (!play || age > ANNOUNCE_MS) {
     if (slot.dataset.showing) {
       slot.replaceChildren();
       delete slot.dataset.showing;
@@ -173,6 +179,99 @@ export function renderAnnounce(view) {
   body.append(text('div', on ? `on ${on}` : play.outcome, 'announce-target'));
   el.append(body);
 
+  slot.replaceChildren(el);
+}
+
+/**
+ * The card turning over. Full screen for a few seconds so the room looks up,
+ * because this is the moment the guess is settled.
+ */
+function renderFlash(play, age) {
+  const box = document.getElementById('flash');
+  if (!box) return;
+
+  if (!play || age > FLASH_MS) {
+    if (!box.hidden) {
+      box.hidden = true;
+      delete box.dataset.showing;
+    }
+    return;
+  }
+  if (box.dataset.showing === String(play.at)) return;
+  box.dataset.showing = String(play.at);
+  box.hidden = false;
+
+  const art = document.getElementById('flash-art');
+  art.src = play.card.image;
+  art.alt = play.card.title;
+  document.getElementById('flash-who').textContent = `${play.by} played`;
+  document.getElementById('flash-card').textContent = play.card.title;
+
+  const result = document.getElementById('flash-result');
+  const botched = play.botched?.length ? play.botched.join(', ') : null;
+  result.classList.toggle('is-countered', !!play.counteredBy);
+  result.classList.toggle('is-botched', !!botched);
+
+  if (play.counteredBy) {
+    result.textContent = `${play.counteredBy} called it — it lands on ${play.by}`;
+  } else if (botched) {
+    result.textContent = `Botched counter — ${botched} drinks double`;
+  } else if (play.targets?.length) {
+    result.textContent = `on ${play.targets.join(', ')}`;
+  } else {
+    result.textContent = play.outcome;
+  }
+}
+
+/** "3 seconds" / "your whole drink" — what is riding on a face-down card. */
+export function stakeText(stake) {
+  if (!stake) return 'something';
+  if (stake.down) return 'your whole drink';
+  if (stake.stopwatch) return 'a timed drink';
+  return `${stake.seconds} second${stake.seconds === 1 ? '' : 's'}`;
+}
+
+/** What a wrong call turns that into. */
+export function botchText(stake) {
+  if (!stake || stake.down || stake.stopwatch || !stake.seconds) return null;
+  return `${stake.seconds * (stake.botchMultiplier ?? 2)} seconds`;
+}
+
+/** A card is face down on the table and the game is waiting on somebody. */
+function renderPending(view) {
+  const slot = document.getElementById('pending');
+  if (!slot) return;
+  const pending = view?.pending;
+
+  if (!pending) {
+    slot.replaceChildren();
+    return;
+  }
+
+  const names = (ids) =>
+    ids.map((id) => view.players.find((p) => p.id === id)?.name ?? '?').join(', ');
+
+  const el = document.createElement('div');
+  el.className = 'pending-banner';
+  el.append(text('div', '', 'pending-back'));
+
+  const body = document.createElement('div');
+  body.className = 'pending-text';
+  body.append(
+    text('b', pending.byName),
+    document.createTextNode(` played a card face down at ${names(pending.targets)}`),
+  );
+  const botched = botchText(pending.stake);
+  body.append(
+    text('span',
+      pending.youCanCounter
+        ? `${stakeText(pending.stake)} at stake${botched ? ` — a wrong call makes it ${botched}` : ''}`
+        : pending.waitingOn.length
+          ? `${stakeText(pending.stake)} at stake · waiting on ${names(pending.waitingOn)}…`
+          : 'Turning it over…',
+      'sub'),
+  );
+  el.append(body);
   slot.replaceChildren(el);
 }
 
@@ -416,7 +515,7 @@ function renderPlayers(view, handlers) {
 
       el.append(text('span', player.name + (player.id === view.you?.id ? ' (you)' : ''), 'n'));
       if (player.wrestler) el.append(text('span', player.wrestler, 'w'));
-      el.append(text('span', tallyText(player), 's'));
+      el.append(text('span', `${player.handCount ?? 0} cards · ${tallyText(player)}`, 's'));
 
       const badges = document.createElement('div');
       badges.className = 'badges';
@@ -439,7 +538,9 @@ export function tallyText(player) {
 
 function renderHand(view, handlers) {
   const hand = view.you?.hand ?? [];
-  $('hand-count').textContent = hand.length ? `(${hand.length})` : '';
+  $('hand-count').textContent = view.canSwap
+    ? `(${hand.length}) · tap one to play or swap`
+    : hand.length ? `(${hand.length})` : '';
   $('hand').replaceChildren(
     ...hand.map((card) => renderCard(card, { onClick: () => handlers.onShowCard(card) })),
   );
@@ -490,11 +591,13 @@ export function cardSheet(card, actions, { onPick } = {}) {
       const box = document.createElement('div');
       box.className = 'sheet-actions';
       for (const action of actions) {
+        // Playing a card is the headline; binning it is the quiet option.
+        const style = action.type === 'swapCard' ? 'btn' : 'btn btn-gold';
         box.append(
           button(action.label, () => {
             close();
             onPick?.(action);
-          }, 'btn btn-gold'),
+          }, style),
         );
       }
       root.append(box);
@@ -552,6 +655,77 @@ export function pickerSheet(
     root.append(list);
     if (needs !== 1) root.append(confirm);
   };
+}
+
+/**
+ * Name the card, or take it.
+ *
+ * The box completes against every Event Card title — the pack's contents are
+ * public, only the holder's hand is secret — so this is a memory game, not a
+ * lucky dip. A blank guess just takes it.
+ */
+export function counterSheet({ byName, stake, onGuess, onAccept }) {
+  return (root, close) => {
+    root.append(text('h2', 'Name the card', 'sheet-title'));
+    root.append(
+      text('p', `${byName} played something at you. Name it and it lands on them instead.`,
+        'sheet-text'),
+    );
+
+    // The whole point of the risk is being able to weigh it up before you try.
+    const botched = botchText(stake);
+    const odds = document.createElement('div');
+    odds.className = 'stake';
+    odds.append(text('div', stakeText(stake), 'stake-amount'));
+    odds.append(
+      text('div',
+        botched ? `at stake — botch it and you drink ${botched}` : 'at stake',
+        'stake-note'),
+    );
+    root.append(odds);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.setAttribute('list', 'event-card-list');
+    input.placeholder = 'Start typing a card name…';
+    input.autocomplete = 'off';
+    root.append(input);
+
+    const box = document.createElement('div');
+    box.className = 'sheet-actions';
+
+    const send = () => {
+      const guess = input.value.trim();
+      if (!guess) return;
+      close();
+      onGuess(guess);
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') send();
+    });
+
+    box.append(button('Call it', send, 'btn btn-gold'));
+    box.append(button(`Just take it (${stakeText(stake)})`, () => {
+      close();
+      onAccept();
+    }));
+    root.append(box);
+    setTimeout(() => input.focus(), 60);
+  };
+}
+
+/** Fill the datalist the guess box completes against. */
+export function fillCardList(options) {
+  const list = document.getElementById('event-card-list');
+  if (!list) return;
+  list.replaceChildren(
+    ...options.map(({ title, text: body }) => {
+      const option = document.createElement('option');
+      option.value = title;
+      option.label = body;
+      return option;
+    }),
+  );
 }
 
 export function tallySheet(view) {

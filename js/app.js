@@ -6,11 +6,12 @@
 
 import { HostRoom, ClientRoom, myIdentity, rememberName } from './room.js';
 import { normaliseCode } from './net.js';
-import { DEFAULT_RULESET, loadDeck, deckLoaded } from './rules/index.js';
+import { DEFAULT_RULESET, loadDeck, deckLoaded, eventCardOptions } from './rules/index.js';
 import {
   showScreen, renderLobby, renderGame, tickCountdowns, syncClock,
   drinkBatches, batchRemaining, watchDock,
   openSheet, closeSheet, sheetIsOpen, cardSheet, pickerSheet, tallySheet,
+  counterSheet, fillCardList,
   toast, text, button,
 } from './ui.js';
 
@@ -100,13 +101,22 @@ function saveWrestler(name) {
   }
 }
 
+/**
+ * The host needs the deck to run the game; everyone needs it for the guess
+ * box to complete against. The pack's contents are public — only who holds
+ * what is secret — so every client loads it.
+ */
+async function ensureDeck() {
+  if (!deckLoaded()) await loadDeck();
+  fillCardList(eventCardOptions());
+}
+
 async function hostTable() {
   const button = $('btn-host');
   button.disabled = true;
   button.textContent = 'Opening the table…';
   try {
-    // Only the host runs the engine, so only the host needs the deck data.
-    if (!deckLoaded()) await loadDeck();
+    await ensureDeck();
 
     room = new HostRoom({
       rulesetId: DEFAULT_RULESET,
@@ -136,6 +146,8 @@ async function joinTable(rawCode) {
   button.disabled = true;
   button.textContent = 'Joining…';
   try {
+    await ensureDeck();
+
     room = new ClientRoom({
       onUpdate: onView,
       onError: (msg) => toast(msg, { error: true }),
@@ -201,6 +213,7 @@ function onView(next) {
   });
 
   if (next.vote) promptVote(next);
+  if (next.pending?.youCanCounter) promptCounter(next);
 
   if (next.phase === 'over' && !resultShown) {
     resultShown = true;
@@ -272,12 +285,13 @@ function resolveOutcome(action) {
 /** Tapping any card opens it full size, with whatever you can do with it. */
 function showCard(card) {
   const actions = view.legalActions.filter(
-    (a) => (a.type === 'playEvent' && a.cardId === card.id) ||
+    (a) => ((a.type === 'playEvent' || a.type === 'swapCard') && a.cardId === card.id) ||
            (a.type === 'outcome' && view.current?.card.id === card.id),
   );
   openSheet(
     cardSheet(card, actions, {
       onPick: (action) => {
+        if (action.type === 'swapCard') return act(action);
         if (action.cardId === 'event-50') return promptHouseRule(action);
         resolveOutcome(action);
       },
@@ -293,16 +307,13 @@ function showPlayer(player) {
       text('p', [player.wrestler, tallyLine(player)].filter(Boolean).join(' · '), 'sheet-text'),
     );
 
-    if (!player.hand?.length) {
-      root.append(text('p', 'No Event Cards.', 'sheet-text'));
-    } else {
-      const strip = document.createElement('div');
-      strip.className = 'hand';
-      for (const card of player.hand) {
-        strip.append(cardThumb(card));
-      }
-      root.append(strip);
-    }
+    root.append(
+      text('p',
+        player.id === view.you?.id
+          ? `You are holding ${view.you.hand.length} cards.`
+          : `Holding ${player.handCount ?? 0} cards — face down.`,
+        'sheet-text'),
+    );
 
     const box = document.createElement('div');
     box.className = 'sheet-actions';
@@ -314,19 +325,6 @@ function showPlayer(player) {
     );
     root.append(box);
   });
-}
-
-function cardThumb(card) {
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'card';
-  const img = document.createElement('img');
-  img.src = card.image;
-  img.alt = card.title;
-  img.loading = 'lazy';
-  el.append(img);
-  el.addEventListener('click', () => showCard(card));
-  return el;
 }
 
 function tallyLine(player) {
@@ -405,6 +403,22 @@ function promptVote(current) {
   );
 }
 
+/**
+ * A card has been played at you. Opened automatically, because the game is
+ * waiting on your answer and nobody should have to hunt for a button.
+ */
+function promptCounter(current) {
+  if (sheetIsOpen()) return;
+  openSheet(
+    counterSheet({
+      byName: current.pending.byName,
+      stake: current.pending.stake,
+      onGuess: (guess) => act({ type: 'guessCard', guessText: guess }),
+      onAccept: () => act({ type: 'acceptCard' }),
+    }),
+  );
+}
+
 function openMenu() {
   openSheet((root, close) => {
     root.append(text('h2', 'More', 'sheet-title'));
@@ -412,6 +426,12 @@ function openMenu() {
     box.className = 'sheet-actions';
 
     for (const action of view.legalActions) {
+      if (action.type === 'revealCard') {
+        box.append(button('Turn the card over', () => {
+          close();
+          act({ type: 'revealCard' });
+        }, 'btn btn-gold'));
+      }
       if (action.type === 'toggleTitleMatch') {
         box.append(button(action.label, () => {
           close();
