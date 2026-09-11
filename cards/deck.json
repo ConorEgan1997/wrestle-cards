@@ -1,0 +1,1985 @@
+[
+ {
+  "id": "event-01",
+  "deck": "event",
+  "n": 1,
+  "title": "In the Hold",
+  "text": "Drink for the duration of time your chosen wrestler is placed in a finisher or signature submission.",
+  "image": "cards/event-01.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "They're in the hold — start the clock",
+    "stopwatch": true,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-02",
+  "deck": "event",
+  "n": 2,
+  "title": "Money in the Bank",
+  "text": "Cash in your drinks and pass them onto someone else.",
+  "image": "cards/event-02.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Cash in — pass my drinks on",
+    "target": "choose",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-03",
+  "deck": "event",
+  "n": 3,
+  "title": "German Suplex",
+  "text": "If a German suplex occurs on your chosen wrestler drink for 3 seconds.",
+  "image": "cards/event-03.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "German suplex — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-04",
+  "deck": "event",
+  "n": 4,
+  "title": "Title Loss",
+  "text": "If your chosen wrestler loses his title down your drink.",
+  "image": "cards/event-04.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "They lost the title — I down it",
+    "down": true,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-09",
+  "deck": "event",
+  "n": 9,
+  "title": "Heel Turn",
+  "text": "Drink for 5 seconds if a heel turn occurs.",
+  "image": "cards/event-09.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Heel turn — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-10",
+  "deck": "event",
+  "n": 10,
+  "title": "Shenanigans",
+  "text": "Drink for 3 seconds if any shenanigans occurs.",
+  "image": "cards/event-10.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Shenanigans — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-11",
+  "deck": "event",
+  "n": 11,
+  "title": "Face Turn",
+  "text": "Drink for 5 seconds if a face turn occurs.",
+  "image": "cards/event-11.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Face turn — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-12",
+  "deck": "event",
+  "n": 12,
+  "title": "Product Placement",
+  "text": "Take a drink for every shameless product placement ad.",
+  "image": "cards/event-12.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Product placement — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-13",
+  "deck": "event",
+  "n": 13,
+  "title": "Hit With a Finisher",
+  "text": "If your chosen wrestler gets hit with a finisher drink for 5 seconds.",
+  "image": "cards/event-13.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Hit with a finisher — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-14",
+  "deck": "event",
+  "n": 14,
+  "title": "Celebrity Spotted",
+  "text": "Drink every time a celebrity is shown in the crowd.",
+  "image": "cards/event-14.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Celebrity spotted — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-15",
+  "deck": "event",
+  "n": 15,
+  "title": "Bladed",
+  "text": "Down your drink if your chosen wrestler is cut open.",
+  "image": "cards/event-15.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "They're bleeding — I down it",
+    "down": true,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-16",
+  "deck": "event",
+  "n": 16,
+  "title": "The Bloodline",
+  "text": "Take a drink anytime The Bloodline is mentioned.",
+  "image": "cards/event-16.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Bloodline mentioned — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-17",
+  "deck": "event",
+  "n": 17,
+  "title": "Divas on Screen",
+  "text": "Drink anytime an attractive diva appears.",
+  "image": "cards/event-17.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Diva on screen — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-18",
+  "deck": "event",
+  "n": 18,
+  "title": "Danhausen",
+  "text": "If Danhausen appears everyone drink.",
+  "image": "cards/event-18.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Danhausen! Everyone drinks 3s",
+    "seconds": 3,
+    "target": "all"
+   }
+  ]
+ },
+ {
+  "id": "event-19",
+  "deck": "event",
+  "n": 19,
+  "title": "Defeat",
+  "text": "If your chosen wrestler loses drink for 5 seconds.",
+  "image": "cards/event-19.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "My wrestler lost — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-20",
+  "deck": "event",
+  "n": 20,
+  "title": "Spanish Announce Table Broken",
+  "text": "Down your beer if the Spanish announcer table is broken.",
+  "image": "cards/event-20.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Table's broken — I down it",
+    "down": true,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-21",
+  "deck": "event",
+  "n": 21,
+  "title": "Legendary Bloodline",
+  "text": "If your chosen wrestler is from a legendary bloodline drink for 3 seconds.",
+  "image": "cards/event-21.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Legendary bloodline — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-22",
+  "deck": "event",
+  "n": 22,
+  "title": "Former World Champion",
+  "text": "If your wrestler is a former world champion drink for 3 seconds.",
+  "image": "cards/event-22.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Former champ — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-23",
+  "deck": "event",
+  "n": 23,
+  "title": "Finisher Reversed",
+  "text": "If your wrestlers finisher is reversed drink for 3 seconds.",
+  "image": "cards/event-23.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Finisher reversed — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-24",
+  "deck": "event",
+  "n": 24,
+  "title": "Heel Turn",
+  "text": "You pick a player of your choice to drink for 3 seconds.",
+  "image": "cards/event-24.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Pick someone to drink 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "event-25",
+  "deck": "event",
+  "n": 25,
+  "title": "Tag Team",
+  "text": "Pick a friend to join your tag. Your next drink is doubled and passed onto someone else of your team's choice.",
+  "image": "cards/event-25.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Pick my tag partner",
+    "target": "choose",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-26",
+  "deck": "event",
+  "n": 26,
+  "title": "Papi and Dixie",
+  "text": "Drink for 3 seconds if a wrestler appears with glasses (sunglasses count).",
+  "image": "cards/event-26.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Glasses spotted — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-27",
+  "deck": "event",
+  "n": 27,
+  "title": "Jude",
+  "text": "Jude drinks for 3 seconds if a bald wrestler appears.",
+  "image": "cards/event-27.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Bald wrestler — Jude drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "event-28",
+  "deck": "event",
+  "n": 28,
+  "title": "Rouse",
+  "text": "Rouse drinks for 3 seconds if an argument hand gesture occurs during the event.",
+  "image": "cards/event-28.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Argument gesture — Rouse drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "event-29",
+  "deck": "event",
+  "n": 29,
+  "title": "Double Team",
+  "text": "If you have this card and a double team move occurs give out two drinks to two players of your choice.",
+  "image": "cards/event-29.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Double team — two players drink 3s",
+    "seconds": 3,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "event-30",
+  "deck": "event",
+  "n": 30,
+  "title": "High Flying",
+  "text": "If a high flying move is performed give out a two second drink.",
+  "image": "cards/event-30.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "High flyer — give out 2s",
+    "seconds": 2,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "event-31",
+  "deck": "event",
+  "n": 31,
+  "title": "Banger Theme",
+  "text": "If your chosen wrestlers theme song is a banger you must drink for 5 seconds.",
+  "image": "cards/event-31.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "It's a banger — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-32",
+  "deck": "event",
+  "n": 32,
+  "title": "Real Name?",
+  "text": "If you don't know your chosen wrestlers real name you must take a drink.",
+  "image": "cards/event-32.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "No idea — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-33",
+  "deck": "event",
+  "n": 33,
+  "title": "Vegas Reunion",
+  "text": "If a wrestler appears that we met in Las Vegas or seen in a casino drink for 3 seconds.",
+  "image": "cards/event-33.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Vegas reunion — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-34",
+  "deck": "event",
+  "n": 34,
+  "title": "Money in the Bank",
+  "text": "If your chosen wrestler wins the Money in the Bank everyone else must drink for 5 seconds.",
+  "image": "cards/event-34.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "My wrestler won it — everyone else drinks 5s",
+    "seconds": 5,
+    "target": "others"
+   }
+  ]
+ },
+ {
+  "id": "event-35",
+  "deck": "event",
+  "n": 35,
+  "title": "Botch!",
+  "text": "Drink for 3 seconds if a botch occurs.",
+  "image": "cards/event-35.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Botch — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-36",
+  "deck": "event",
+  "n": 36,
+  "title": "Two Count!",
+  "text": "Drink every time there is a two count.",
+  "image": "cards/event-36.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Two count — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-37",
+  "deck": "event",
+  "n": 37,
+  "title": "Table or Ladder!",
+  "text": "Drink for 5 seconds if your wrestler is put through a table or ladder.",
+  "image": "cards/event-37.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Through a table — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-38",
+  "deck": "event",
+  "n": 38,
+  "title": "Small Package!",
+  "text": "Down your drink for a small package or any type of roll up.",
+  "image": "cards/event-38.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Roll up — I down it",
+    "down": true,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-39",
+  "deck": "event",
+  "n": 39,
+  "title": "Ladder Leap!",
+  "text": "Give out a 5 second drink if your wrestler jumps off a ladder.",
+  "image": "cards/event-39.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Off the ladder — give out 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "event-40",
+  "deck": "event",
+  "n": 40,
+  "title": "Nip Up!",
+  "text": "Take a drink for a nip up.",
+  "image": "cards/event-40.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Nip up — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-41",
+  "deck": "event",
+  "n": 41,
+  "title": "Mexican / Canadian Destroyer!",
+  "text": "Drink for 3 seconds if your wrestler is hit by any sort of Mexican / Canadian destroyer.",
+  "image": "cards/event-41.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Destroyer — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-42",
+  "deck": "event",
+  "n": 42,
+  "title": "3 Amigos!",
+  "text": "Drink for 3 amigos.",
+  "image": "cards/event-42.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Three amigos — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-43",
+  "deck": "event",
+  "n": 43,
+  "title": "Briefcase Hug!",
+  "text": "If your wrestler wins the Money in the Bank and finishes by hugging the referee with the briefcase choose someone to down their drink.",
+  "image": "cards/event-43.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Briefcase hug — they down it",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "event-44",
+  "deck": "event",
+  "n": 44,
+  "title": "Hot Tag!",
+  "text": "Drink for a hot tag.",
+  "image": "cards/event-44.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Hot tag — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-45",
+  "deck": "event",
+  "n": 45,
+  "title": "Cash in Same Night!",
+  "text": "Down your drink if your Money in the Bank winner cashes in the same night.",
+  "image": "cards/event-45.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Cashed in — I down it",
+    "down": true,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "event-46",
+  "deck": "event",
+  "n": 46,
+  "title": "Hot Tag!",
+  "text": "Hot tag! You can choose someone to tag in and give half of your drinking penalty too.",
+  "image": "cards/event-46.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Tag someone in — split my penalty",
+    "target": "choose",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-47",
+  "deck": "event",
+  "n": 47,
+  "title": "Rope Break!",
+  "text": "Call rope break if your called upon for a drink and the drink will be passed onto the person on your left.",
+  "image": "cards/event-47.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Rope break — pass it left",
+    "target": "left",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-48",
+  "deck": "event",
+  "n": 48,
+  "title": "No Sell!",
+  "text": "If someone gives you drinks use this card to no sell and give them the drinks in return.",
+  "image": "cards/event-48.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "No sell — send it back",
+    "target": "choose",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-49",
+  "deck": "event",
+  "n": 49,
+  "title": "You Are Cursed!",
+  "text": "Play this card on somebody and they must take the next 3 drink punishments.",
+  "image": "cards/event-49.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Curse a player",
+    "target": "choose",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-50",
+  "deck": "event",
+  "n": 50,
+  "title": "WWE Champion!",
+  "text": "You are the champion! You can create one drinking rule that everyone must abide by for the event.",
+  "image": "cards/event-50.webp",
+  "once": true,
+  "outcomes": [
+   {
+    "label": "Declare my rule",
+    "target": "self",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-51",
+  "deck": "event",
+  "n": 51,
+  "title": "Title Match Penalty!",
+  "text": "Your drinking penalties are doubled during title matches.",
+  "image": "cards/event-51.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Acknowledge — my penalties double in title matches",
+    "target": "self",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "event-52",
+  "deck": "event",
+  "n": 52,
+  "title": "Pass the Penalty!",
+  "text": "If you win a mini game your title match drinking penalty is passed onto the loser of the mini game.",
+  "image": "cards/event-52.webp",
+  "once": false,
+  "outcomes": [
+   {
+    "label": "Pass my title match penalty on",
+    "target": "choose",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "mini-01",
+  "deck": "mini",
+  "n": 1,
+  "title": "Tag Team Throwdown",
+  "text": "Pick a tag partner. You must go back and forth naming tag teams against two other players. The first team to fail or repeat loses.",
+  "image": "cards/mini-01.webp",
+  "outcomes": [
+   {
+    "label": "Losing team drinks 5s",
+    "seconds": 5,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-02",
+  "deck": "mini",
+  "n": 2,
+  "title": "Catchphrase Chaos",
+  "text": "Take turns naming wrestler catchphrases. The first person to fail or repeat loses.",
+  "image": "cards/mini-02.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-03",
+  "deck": "mini",
+  "n": 3,
+  "title": "Royal Rumble Royalty",
+  "text": "Take turns naming Royal Rumble winners. The first person to fail or repeat loses.",
+  "image": "cards/mini-03.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 30s",
+    "seconds": 30,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-04",
+  "deck": "mini",
+  "n": 4,
+  "title": "One Name Only",
+  "text": "The players to your left and right will take turns against each other naming wrestlers with one name. The first person to fail or repeat loses.",
+  "image": "cards/mini-04.webp",
+  "outcomes": [
+   {
+    "label": "Loser takes a shot",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-05",
+  "deck": "mini",
+  "n": 5,
+  "title": "ECW Legends",
+  "text": "Take turns naming ECW legends. The first person to fail or repeat loses.",
+  "image": "cards/mini-05.webp",
+  "outcomes": [
+   {
+    "label": "Loser downs their can and smashes it across their head",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-06",
+  "deck": "mini",
+  "n": 6,
+  "title": "Wrestling Families",
+  "text": "Take turns naming wrestlers from wrestling families (e.g. fathers & sons, brothers, cousins, etc.). The first person to fail or repeat loses.",
+  "image": "cards/mini-06.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 1s per Bloodline member named",
+    "seconds": 1,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-07",
+  "deck": "mini",
+  "n": 7,
+  "title": "Deceased Wrestlers",
+  "text": "Take turns naming deceased wrestlers. The first person to fail or repeat loses.",
+  "image": "cards/mini-07.webp",
+  "outcomes": [
+   {
+    "label": "Loser downs their can in memory of the dead",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-08",
+  "deck": "mini",
+  "n": 8,
+  "title": "Wrestler Nicknames",
+  "text": "Take turns naming wrestlers nicknames. The first person to fail or repeat loses.",
+  "image": "cards/mini-08.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 1s per letter of their nickname",
+    "seconds": 1,
+    "target": "choose"
+   },
+   {
+    "label": "No nickname — down the can",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-09",
+  "deck": "mini",
+  "n": 9,
+  "title": "Non American Wrestlers",
+  "text": "Take turns naming non American wrestlers (from any country outside the United States). The first person to fail or repeat loses.",
+  "image": "cards/mini-09.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks the flight time to that wrestler's country",
+    "seconds": 10,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-10",
+  "deck": "mini",
+  "n": 10,
+  "title": "Finishing Moves",
+  "text": "Take turns naming wrestlers finishing moves (e.g. Stone Cold Stunner, RKO, Pedigree, Spear, etc). The first person to fail or repeat loses.",
+  "image": "cards/mini-10.webp",
+  "outcomes": [
+   {
+    "label": "Loser finishes their can",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-11",
+  "deck": "mini",
+  "n": 11,
+  "title": "Elimination Chamber",
+  "text": "Keep naming people who have participated in an Elimination Chamber match. Continue until only one player is left standing.",
+  "image": "cards/mini-11.webp",
+  "outcomes": [
+   {
+    "label": "Everyone eliminated drinks 6s",
+    "seconds": 6,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-12",
+  "deck": "mini",
+  "n": 12,
+  "title": "WCW & WWE Legends",
+  "text": "Take turns naming wrestlers who have appeared in both WCW and WWE. The first person to fail or repeat loses.",
+  "image": "cards/mini-12.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-13",
+  "deck": "mini",
+  "n": 13,
+  "title": "Match Stipulations",
+  "text": "Take turns against the person to your left naming wrestling match stipulations (e.g. steel cage, TLC, Hell in a Cell, etc.). The first person to fail or repeat loses.",
+  "image": "cards/mini-13.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 4s",
+    "seconds": 4,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-14",
+  "deck": "mini",
+  "n": 14,
+  "title": "Wrestling Factions",
+  "text": "Take turns naming wrestling factions (e.g. The Shield, Evolution, DX, etc.). If you fail or repeat, the player to your right has 30 seconds to name as many nWo members as they can.",
+  "image": "cards/mini-14.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 1s per nWo member named",
+    "seconds": 1,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-15",
+  "deck": "mini",
+  "n": 15,
+  "title": "A-Z Wrestlers",
+  "text": "Take turns naming wrestlers in alphabetical order (A–Z). Keep going until only one player is left. If you fail or repeat, you're out for this round.",
+  "image": "cards/mini-15.webp",
+  "outcomes": [
+   {
+    "label": "Eliminated players drink 5s",
+    "seconds": 5,
+    "target": "many"
+   },
+   {
+    "label": "Second round — 10s each",
+    "seconds": 10,
+    "target": "many"
+   },
+   {
+    "label": "Third round — 15s each",
+    "seconds": 15,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-16",
+  "deck": "mini",
+  "n": 16,
+  "title": "Managers & General Managers",
+  "text": "Take turns naming wrestling managers and general managers (e.g. Paul Heyman, Vickie Guerrero, Eric Bischoff, Adam Pearce, etc.). If you fail or repeat, the player to your right becomes your manager and decides how long you drink.",
+  "image": "cards/mini-16.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks — manager decides",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-17",
+  "deck": "mini",
+  "n": 17,
+  "title": "Money in the Bank Cash In",
+  "text": "Just like a real cash in... Pick any player to drink for 5 seconds.",
+  "image": "cards/mini-17.webp",
+  "outcomes": [
+   {
+    "label": "They drink 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-18",
+  "deck": "mini",
+  "n": 18,
+  "title": "Reversal",
+  "text": "Just like in the ring... you reversed a finisher! Pick any player to drink for 5 seconds.",
+  "image": "cards/mini-18.webp",
+  "outcomes": [
+   {
+    "label": "They drink 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-19",
+  "deck": "mini",
+  "n": 19,
+  "title": "Heel Turn",
+  "text": "You've turned heel! Pick a friend to drink for 5 seconds.",
+  "image": "cards/mini-19.webp",
+  "outcomes": [
+   {
+    "label": "They drink 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-20",
+  "deck": "mini",
+  "n": 20,
+  "title": "Faction Formed",
+  "text": "You and the players to your left and right have formed a faction! Pick any player to drink for 5 seconds.",
+  "image": "cards/mini-20.webp",
+  "outcomes": [
+   {
+    "label": "They drink 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-21",
+  "deck": "mini",
+  "n": 21,
+  "title": "WWE & TNA Crossovers",
+  "text": "Take turns naming wrestlers who have been in both WWE and TNA. Keep going until one player is left.",
+  "image": "cards/mini-21.webp",
+  "outcomes": [
+   {
+    "label": "Losers drink 5s",
+    "seconds": 5,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-22",
+  "deck": "mini",
+  "n": 22,
+  "title": "Gimmicked Up",
+  "text": "Take turns naming wrestlers with gimmicks (e.g. The Undertaker, Doink, Mankind, etc.). Keep going until one player is left.",
+  "image": "cards/mini-22.webp",
+  "outcomes": [
+   {
+    "label": "Losers drink 5s",
+    "seconds": 5,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-23",
+  "deck": "mini",
+  "n": 23,
+  "title": "Female Wrestlers",
+  "text": "Take turns naming female wrestlers (past or present). The first person to fail or repeat loses.",
+  "image": "cards/mini-23.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-24",
+  "deck": "mini",
+  "n": 24,
+  "title": "ECW & WWE Double Duty",
+  "text": "Take turns naming wrestlers who have wrestled in both ECW and WWE. Keep going until one player is left.",
+  "image": "cards/mini-24.webp",
+  "outcomes": [
+   {
+    "label": "Losers drink 5s",
+    "seconds": 5,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-25",
+  "deck": "mini",
+  "n": 25,
+  "title": "Submission Specialists",
+  "text": "Take turns naming wrestler finisher or signature submissions (e.g. Sharpshooter, STF, Ankle Lock, etc.). The first person to fail or repeat loses.",
+  "image": "cards/mini-25.webp",
+  "outcomes": [
+   {
+    "label": "Loser taps out and downs their can",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-26",
+  "deck": "mini",
+  "n": 26,
+  "title": "Masked Wrestlers",
+  "text": "Take turns naming wrestlers who have worn a mask (past or present). The first person to fail or repeat loses.",
+  "image": "cards/mini-26.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-27",
+  "deck": "mini",
+  "n": 27,
+  "title": "Multiple Characters",
+  "text": "Take turns naming wrestlers who have used two different characters or gimmicks (e.g. Kane/The Undertaker, Mankind/Cactus Jack, etc.). Keep going until there are two players left.",
+  "image": "cards/mini-27.webp",
+  "outcomes": [
+   {
+    "label": "Losers drink 5s",
+    "seconds": 5,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-28",
+  "deck": "mini",
+  "n": 28,
+  "title": "Black Wrestlers",
+  "text": "Take turns naming Black wrestlers (past or present). Keep going until one player is left. Hot tag rule: the winner can save one player from drinking.",
+  "image": "cards/mini-28.webp",
+  "outcomes": [
+   {
+    "label": "Losers drink 5s",
+    "seconds": 5,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-29",
+  "deck": "mini",
+  "n": 29,
+  "title": "Kayfabe Relatives",
+  "text": "Take turns naming kayfabe wrestling relatives (e.g. brothers, fathers, sons, cousins, etc.). The first person to fail or repeat loses.",
+  "image": "cards/mini-29.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   },
+   {
+    "label": "...and picks a relative to drink with them",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-30",
+  "deck": "mini",
+  "n": 30,
+  "title": "One on One With the Undertaker",
+  "text": "Take turns naming The Undertaker's WrestleMania opponents. If you fail or repeat, you drink for the same number of seconds as the WrestleMania number of the last correct opponent mentioned.",
+  "image": "cards/mini-30.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks the WrestleMania number",
+    "seconds": 28,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-31",
+  "deck": "mini",
+  "n": 31,
+  "title": "Supernatural Characters",
+  "text": "Take turns naming supernatural characters (in WWE or other wrestling). Keep going until one player is left.",
+  "image": "cards/mini-31.webp",
+  "outcomes": [
+   {
+    "label": "Winner may double the drinks for the loser of the next round",
+    "target": "self",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "mini-32",
+  "deck": "mini",
+  "n": 32,
+  "title": "Wrestling Couples",
+  "text": "Take turns with the person to your left naming wrestling couples (real life or kayfabe). The first person to fail or repeat loses.",
+  "image": "cards/mini-32.webp",
+  "outcomes": [
+   {
+    "label": "Loser picks a partner — both drink 5s",
+    "seconds": 5,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-33",
+  "deck": "mini",
+  "n": 33,
+  "title": "Bald Wrestlers",
+  "text": "Take turns naming bald wrestlers (past or present). The first person to fail or repeat loses.",
+  "image": "cards/mini-33.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 4s",
+    "seconds": 4,
+    "target": "choose"
+   },
+   {
+    "label": "If Jude lost — 8s",
+    "seconds": 8,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-34",
+  "deck": "mini",
+  "n": 34,
+  "title": "Asian Wrestlers",
+  "text": "Take turns naming Asian wrestlers (past or present). The first person to fail or repeat loses.",
+  "image": "cards/mini-34.webp",
+  "outcomes": [
+   {
+    "label": "Loser does their best Japanese accent and drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-35",
+  "deck": "mini",
+  "n": 35,
+  "title": "Attitude Era Wrestlers",
+  "text": "Take turns naming Attitude Era wrestlers (1997 – 2002). The first person to fail or repeat loses.",
+  "image": "cards/mini-35.webp",
+  "outcomes": [
+   {
+    "label": "Loser downs their can in the name of the Attitude Era",
+    "down": true,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-36",
+  "deck": "mini",
+  "n": 36,
+  "title": "Last Man Standing",
+  "text": "Take turns naming former WWE / World Heavyweight champions (past or present). Keep going until there is one person left – the last man standing.",
+  "image": "cards/mini-36.webp",
+  "outcomes": [
+   {
+    "label": "Winner picks anyone to drink 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-37",
+  "deck": "mini",
+  "n": 37,
+  "title": "Cruiserweight Challenge",
+  "text": "The person to your right has 15 seconds to name 8 former WWE Cruiserweight champions.",
+  "image": "cards/mini-37.webp",
+  "outcomes": [
+   {
+    "label": "They named 8 — I drink 8s",
+    "seconds": 8,
+    "target": "self"
+   },
+   {
+    "label": "They failed — they drink 8s",
+    "seconds": 8,
+    "target": "right"
+   }
+  ]
+ },
+ {
+  "id": "mini-38",
+  "deck": "mini",
+  "n": 38,
+  "title": "Nexus Roll Call",
+  "text": "The person to your left has 10 seconds to name 5 members of Nexus.",
+  "image": "cards/mini-38.webp",
+  "outcomes": [
+   {
+    "label": "They succeeded — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   },
+   {
+    "label": "They failed — they drink 5s",
+    "seconds": 5,
+    "target": "left"
+   }
+  ]
+ },
+ {
+  "id": "mini-39",
+  "deck": "mini",
+  "n": 39,
+  "title": "Count Out",
+  "text": "Count out! The person to your right drinks for 10 seconds.",
+  "image": "cards/mini-39.webp",
+  "outcomes": [
+   {
+    "label": "They drink 10s",
+    "seconds": 10,
+    "target": "right"
+   }
+  ]
+ },
+ {
+  "id": "mini-40",
+  "deck": "mini",
+  "n": 40,
+  "title": "3 Count",
+  "text": "3 count! The person to your left drinks for 3 seconds.",
+  "image": "cards/mini-40.webp",
+  "outcomes": [
+   {
+    "label": "They drink 3s",
+    "seconds": 3,
+    "target": "left"
+   }
+  ]
+ },
+ {
+  "id": "mini-41",
+  "deck": "mini",
+  "n": 41,
+  "title": "Triple Company Challenge",
+  "text": "Pick 3 opponents. Take turns naming wrestlers who have been in all three: TNA, WCW and WWE. The first person to fail or repeat loses.",
+  "image": "cards/mini-41.webp",
+  "outcomes": [
+   {
+    "label": "Losers drink 9s — 3s per company",
+    "seconds": 9,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-42",
+  "deck": "mini",
+  "n": 42,
+  "title": "Title Roll Call",
+  "text": "Take turns naming current and former WWE titles (singles, tag team, women's, and any other official titles). The first person to fail or repeat loses.",
+  "image": "cards/mini-42.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 4s",
+    "seconds": 4,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-43",
+  "deck": "mini",
+  "n": 43,
+  "title": "Slow Ref Count",
+  "text": "The referee starts a slow count! The person to your right drinks for 5 seconds.",
+  "image": "cards/mini-43.webp",
+  "outcomes": [
+   {
+    "label": "They drink 5s",
+    "seconds": 5,
+    "target": "right"
+   }
+  ]
+ },
+ {
+  "id": "mini-44",
+  "deck": "mini",
+  "n": 44,
+  "title": "Commentary Call",
+  "text": "Take turns naming current and former wrestling commentators (WWE, WCW, TNA, AEW, etc.). The first person to fail or repeat loses.",
+  "image": "cards/mini-44.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-45",
+  "deck": "mini",
+  "n": 45,
+  "title": "Weapons Challenge",
+  "text": "The person to your left has 15 seconds to name 10 weapons used in wrestling.",
+  "image": "cards/mini-45.webp",
+  "outcomes": [
+   {
+    "label": "They succeeded — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   },
+   {
+    "label": "They failed — they drink 5s",
+    "seconds": 5,
+    "target": "left"
+   }
+  ]
+ },
+ {
+  "id": "mini-46",
+  "deck": "mini",
+  "n": 46,
+  "title": "Wrestling Companies",
+  "text": "The person to your right and left must go back and forth naming wrestling companies (past & present).",
+  "image": "cards/mini-46.webp",
+  "outcomes": [
+   {
+    "label": "Whoever failed drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-47",
+  "deck": "mini",
+  "n": 47,
+  "title": "You're Fired!",
+  "text": "Whoever draws this card must drink for 5 seconds.",
+  "image": "cards/mini-47.webp",
+  "outcomes": [
+   {
+    "label": "I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-48",
+  "deck": "mini",
+  "n": 48,
+  "title": "Wrestlers & Movies",
+  "text": "Take turns going back and forth naming wrestlers and movies they have starred in.",
+  "image": "cards/mini-48.webp",
+  "outcomes": [
+   {
+    "label": "Whoever failed drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-49",
+  "deck": "mini",
+  "n": 49,
+  "title": "Referee Rumble",
+  "text": "The players to your left and right must take turns naming referees. The first person to lose must get a 3 count and drink for 3 seconds.",
+  "image": "cards/mini-49.webp",
+  "outcomes": [
+   {
+    "label": "Loser takes the 3 count and drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-50",
+  "deck": "mini",
+  "n": 50,
+  "title": "9 to 5",
+  "text": "Take turns naming wrestlers who have another profession as their gimmick (e.g. cop, doctor, teacher, plumber, etc.). The first person to lose must drink for 8 seconds in the name of an 8-hour work shift.",
+  "image": "cards/mini-50.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 8s",
+    "seconds": 8,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-51",
+  "deck": "mini",
+  "n": 51,
+  "title": "Hart Family Challenge",
+  "text": "The person to your left has 10 seconds to name 5 members of the Hart family.",
+  "image": "cards/mini-51.webp",
+  "outcomes": [
+   {
+    "label": "They succeeded — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   },
+   {
+    "label": "They failed — they drink 5s",
+    "seconds": 5,
+    "target": "left"
+   }
+  ]
+ },
+ {
+  "id": "mini-52",
+  "deck": "mini",
+  "n": 52,
+  "title": "Wrestler Name Game",
+  "text": "Go back and forth naming wrestlers until one person is left. The next wrestler must begin with the last letter of the previous wrestler's name. Example: Jeff Hardy → the next wrestler must begin with H.",
+  "image": "cards/mini-52.webp",
+  "outcomes": [
+   {
+    "label": "Last standing dishes out 20s among the losers",
+    "seconds": 20,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-53",
+  "deck": "mini",
+  "n": 53,
+  "title": "Irish Wrestlers",
+  "text": "Take turns naming Irish wrestlers. The first person to fail or repeat must drink for 3 seconds.",
+  "image": "cards/mini-53.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-54",
+  "deck": "mini",
+  "n": 54,
+  "title": "Wrestler Name Game Part 2",
+  "text": "Go back and forth naming wrestlers until one person is left. The next wrestler must begin with the last letter of the previous wrestler's name.",
+  "image": "cards/mini-54.webp",
+  "outcomes": [
+   {
+    "label": "Last standing dishes out 20s among the losers",
+    "seconds": 20,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-55",
+  "deck": "mini",
+  "n": 55,
+  "title": "General Manager Mode",
+  "text": "You are in General Manager mode. You may pick another player to drink for 3 seconds.",
+  "image": "cards/mini-55.webp",
+  "outcomes": [
+   {
+    "label": "They drink 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-56",
+  "deck": "mini",
+  "n": 56,
+  "title": "Taboo Tuesday",
+  "text": "The group must vote on who drinks for 5 seconds. The person with the most votes must drink.",
+  "image": "cards/mini-56.webp",
+  "outcomes": [
+   {
+    "label": "Most votes drinks 5s",
+    "seconds": 5,
+    "target": "vote"
+   }
+  ]
+ },
+ {
+  "id": "mini-57",
+  "deck": "mini",
+  "n": 57,
+  "title": "English Wrestlers",
+  "text": "The persons to your left and right must take turns naming English wrestlers. The first person to fail or repeat must drink for 3 seconds.",
+  "image": "cards/mini-57.webp",
+  "outcomes": [
+   {
+    "label": "Loser drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-58",
+  "deck": "mini",
+  "n": 58,
+  "title": "WWE PPV Challenge",
+  "text": "The person to your left has 20 seconds to name 10 WWE PPVs.",
+  "image": "cards/mini-58.webp",
+  "outcomes": [
+   {
+    "label": "They succeeded — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   },
+   {
+    "label": "They failed — they drink 5s",
+    "seconds": 5,
+    "target": "left"
+   }
+  ]
+ },
+ {
+  "id": "mini-59",
+  "deck": "mini",
+  "n": 59,
+  "title": "TNA PPV Challenge",
+  "text": "The person to your right must name 3 TNA PPVs.",
+  "image": "cards/mini-59.webp",
+  "outcomes": [
+   {
+    "label": "They succeeded — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   },
+   {
+    "label": "They failed — they drink 3s",
+    "seconds": 3,
+    "target": "right"
+   }
+  ]
+ },
+ {
+  "id": "mini-60",
+  "deck": "mini",
+  "n": 60,
+  "title": "WCW PPV Challenge",
+  "text": "You must name 3 WCW PPVs.",
+  "image": "cards/mini-60.webp",
+  "outcomes": [
+   {
+    "label": "I named them — hand out 5s",
+    "seconds": 5,
+    "target": "many"
+   },
+   {
+    "label": "I failed — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-61",
+  "deck": "mini",
+  "n": 61,
+  "title": "King of the Ring Winners",
+  "text": "Take turns naming King of the Ring winners until one person is left. The last person standing is the King of the Ring and picks who drinks.",
+  "image": "cards/mini-61.webp",
+  "outcomes": [
+   {
+    "label": "King picks a player to drink 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-62",
+  "deck": "mini",
+  "n": 62,
+  "title": "Wrestlers You Would Beat",
+  "text": "Take turns naming wrestlers you think you would beat in a fight. Continue until the majority of the group disagrees that you would win.",
+  "image": "cards/mini-62.webp",
+  "outcomes": [
+   {
+    "label": "First to lose drinks 5s",
+    "seconds": 5,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-63",
+  "deck": "mini",
+  "n": 63,
+  "title": "Botch!",
+  "text": "Drink for 3 seconds.",
+  "image": "cards/mini-63.webp",
+  "outcomes": [
+   {
+    "label": "I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-64",
+  "deck": "mini",
+  "n": 64,
+  "title": "Montreal Screw Job",
+  "text": "Pick a player to drink for 3 seconds. If you pick yourself, you screwed yourself... and the drink is doubled and passed back onto you.",
+  "image": "cards/mini-64.webp",
+  "outcomes": [
+   {
+    "label": "They drink 3s",
+    "seconds": 3,
+    "target": "choose"
+   },
+   {
+    "label": "I screwed myself — 6s",
+    "seconds": 6,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-65",
+  "deck": "mini",
+  "n": 65,
+  "title": "That's Not Going to Work For Me Brother",
+  "text": "You get to skip the 3 drinks for this one as you refuse to do the job and pass it to the person to your left.",
+  "image": "cards/mini-65.webp",
+  "outcomes": [
+   {
+    "label": "Pass it left — they drink 3s",
+    "seconds": 3,
+    "target": "left"
+   }
+  ]
+ },
+ {
+  "id": "mini-66",
+  "deck": "mini",
+  "n": 66,
+  "title": "Burying Talent",
+  "text": "The worst performer of the game so far must pay their dues and drink for 3 seconds.",
+  "image": "cards/mini-66.webp",
+  "outcomes": [
+   {
+    "label": "Worst performer drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-67",
+  "deck": "mini",
+  "n": 67,
+  "title": "Vacated Championship",
+  "text": "Finish your drink and declare you can vacant.",
+  "image": "cards/mini-67.webp",
+  "outcomes": [
+   {
+    "label": "I finish my drink",
+    "down": true,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-68",
+  "deck": "mini",
+  "n": 68,
+  "title": "Botchamania",
+  "text": "You botched WrestleMania. Your drinking losses are doubled for the next 5 minutes.",
+  "image": "cards/mini-68.webp",
+  "outcomes": [
+   {
+    "label": "Start the 5 minutes — my drinks are doubled",
+    "target": "self",
+    "seconds": 0
+   }
+  ]
+ },
+ {
+  "id": "mini-69",
+  "deck": "mini",
+  "n": 69,
+  "title": "Tribal Chief",
+  "text": "You must refer to the person to your left as your Tribal Chief until you win a mini game. Anytime you call them by any other name you must drink.",
+  "image": "cards/mini-69.webp",
+  "outcomes": [
+   {
+    "label": "I slipped up — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-70",
+  "deck": "mini",
+  "n": 70,
+  "title": "The Shield",
+  "text": "Pick two other players to take 4 drinks with you.",
+  "image": "cards/mini-70.webp",
+  "outcomes": [
+   {
+    "label": "The three of us drink 4s",
+    "seconds": 4,
+    "target": "many"
+   }
+  ]
+ },
+ {
+  "id": "mini-71",
+  "deck": "mini",
+  "n": 71,
+  "title": "The Jobber",
+  "text": "For the next 5 mini games you must take a drink.",
+  "image": "cards/mini-71.webp",
+  "outcomes": [
+   {
+    "label": "Jobbing again — I drink 3s",
+    "seconds": 3,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-72",
+  "deck": "mini",
+  "n": 72,
+  "title": "Double Count Out",
+  "text": "You and the person to your right must drink for 4 seconds.",
+  "image": "cards/mini-72.webp",
+  "outcomes": [
+   {
+    "label": "We both drink 4s",
+    "seconds": 4,
+    "target": "selfright"
+   }
+  ]
+ },
+ {
+  "id": "mini-73",
+  "deck": "mini",
+  "n": 73,
+  "title": "Outside WWE",
+  "text": "Name a wrestler who never wrestled in WWE.",
+  "image": "cards/mini-73.webp",
+  "outcomes": [
+   {
+    "label": "I named one — hand out 5 drinks",
+    "seconds": 5,
+    "target": "many"
+   },
+   {
+    "label": "I couldn't — I take 5 drinks",
+    "seconds": 15,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-74",
+  "deck": "mini",
+  "n": 74,
+  "title": "You Are Cursed",
+  "text": "Danhausen picks someone to drink for 3 seconds.",
+  "image": "cards/mini-74.webp",
+  "outcomes": [
+   {
+    "label": "They drink 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ },
+ {
+  "id": "mini-75",
+  "deck": "mini",
+  "n": 75,
+  "title": "Animal Instincts",
+  "text": "Name 5 animal related wrestlers.",
+  "image": "cards/mini-75.webp",
+  "outcomes": [
+   {
+    "label": "I named 5 — nothing happens",
+    "target": "self",
+    "seconds": 0
+   },
+   {
+    "label": "I couldn't — I drink 5s",
+    "seconds": 5,
+    "target": "self"
+   }
+  ]
+ },
+ {
+  "id": "mini-76",
+  "deck": "mini",
+  "n": 76,
+  "title": "Legend Killer",
+  "text": "The oldest person in the room must drink for 3 seconds.",
+  "image": "cards/mini-76.webp",
+  "outcomes": [
+   {
+    "label": "Oldest player drinks 3s",
+    "seconds": 3,
+    "target": "choose"
+   }
+  ]
+ }
+]
