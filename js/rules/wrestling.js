@@ -78,6 +78,7 @@ export const wrestling = {
       vote: null, // { orderTemplate, by, votes: {voterId: targetId} }
       houseRules: [], // created by WWE Champion
       nextOrderId: 1,
+      nextBatchId: 1,
     };
 
     ctx.log('Event Cards dealt. Pick your poison.');
@@ -114,7 +115,9 @@ export const wrestling = {
       actions.push({ type: 'endTurn', label: 'Next player' });
     }
 
-    // Event Cards are reactive: they can be played on anyone's turn.
+    // Event Cards are reactive: they can be played on anyone's turn. Whoever
+    // plays one always gets to say who it lands on, so every one of these
+    // carries the card's natural target as a suggestion the picker starts on.
     for (const card of player.hand) {
       card.outcomes.forEach((outcome, index) => {
         actions.push({
@@ -123,7 +126,8 @@ export const wrestling = {
           index,
           label: outcome.label,
           target: outcome.target,
-          needs: outcome.target === 'choose' ? 1 : outcome.target === 'many' ? -1 : 0,
+          needs: -1,
+          suggested: suggestedTargets(state, player, outcome.target),
         });
       });
     }
@@ -132,10 +136,22 @@ export const wrestling = {
     // amount to "someone decides", and arguing with the app is no fun.
     actions.push({ type: 'give', label: 'Give out a drink' });
 
+    // The clock: one action per batch, offered to whoever may run it.
+    const batches = new Map();
     for (const order of v.orders) {
-      if (order.playerId !== player.id || order.doneAt) continue;
-      if (!order.startedAt) actions.push({ type: 'startOrder', orderId: order.id, label: 'Drink' });
-      else actions.push({ type: 'finishOrder', orderId: order.id, label: 'Done' });
+      if (order.doneAt) continue;
+      if (!batches.has(order.batch)) batches.set(order.batch, []);
+      batches.get(order.batch).push(order);
+    }
+    for (const [batch, orders] of batches) {
+      const mayRun = player.isHost
+        || orders.some((o) => o.from === player.id || o.playerId === player.id);
+      if (!mayRun) continue;
+      actions.push({
+        type: orders.some((o) => o.startedAt) ? 'finishBatch' : 'startBatch',
+        batch,
+        label: orders.some((o) => o.startedAt) ? 'Done' : 'Start',
+      });
     }
 
     if (player.isHost) {
@@ -182,25 +198,39 @@ export const wrestling = {
         const outcome = card.outcomes[action.index];
         if (!outcome) ctx.illegal('Unknown outcome');
 
-        applyOutcome(state, player, outcome, action.targets, card.title, ctx);
+        const hit = applyOutcome(state, player, outcome, action.targets, card.title, ctx, {
+          allowOverride: true,
+        });
         applyCardSideEffects(state, player, card, action, ctx);
 
-        if (card.once) {
-          player.hand.splice(index, 1);
-          v.eventDiscard.push(card);
-          // Keep hands topped up so nobody runs dry early in the night.
-          const replacement = v.eventPool.shift();
-          if (replacement) player.hand.push(replacement);
-          ctx.log(`${player.name} used ${card.title}`);
-        }
+        // Every played card leaves the hand and is replaced, one-shot or not.
+        // A hand is always four cards, so there is always something to play.
+        player.hand.splice(index, 1);
+        v.eventDiscard.push(card);
+        const replacement = drawEvent(state, ctx);
+        if (replacement) player.hand.push(replacement);
+
+        // What the whole lobby sees. The log alone is too quiet for this —
+        // people are watching a match, not the app.
+        v.lastPlay = {
+          card: clone(card),
+          by: player.name,
+          byId: player.id,
+          outcome: outcome.label,
+          targets: hit.map((t) => t.name),
+          at: Date.now(),
+        };
+        ctx.log(`${player.name} played ${card.title}`);
         return;
       }
 
       case 'give': {
-        const targets = resolveTargets(state, player, 'choose', action.targets, ctx);
+        const targets = resolveTargets(state, player, 'many', action.targets, ctx);
         const seconds = clampSeconds(action.seconds);
+        const batch = v.nextBatchId++;
         for (const target of targets) {
           addOrder(state, target, {
+            batch,
             seconds: action.down ? null : seconds,
             down: !!action.down,
             label: action.label || `${player.name} handed out a drink`,
@@ -210,9 +240,26 @@ export const wrestling = {
         return;
       }
 
+      // One play can put several people on the clock ("everyone drinks"), so
+      // the table runs them as a single countdown rather than five.
+      case 'startBatch': {
+        const orders = findBatch(state, action.batch, ctx);
+        requireController(orders, player, ctx);
+        const at = Date.now();
+        for (const order of orders) order.startedAt ??= at;
+        return;
+      }
+
+      case 'finishBatch': {
+        const orders = findBatch(state, action.batch, ctx);
+        requireController(orders, player, ctx);
+        for (const order of [...orders]) settleOrder(state, order, ctx);
+        return;
+      }
+
       case 'startOrder': {
         const order = findOrder(state, action.orderId, ctx);
-        if (order.playerId !== player.id) ctx.illegal('That drink is not yours');
+        requireController([order], player, ctx);
         if (order.startedAt) ctx.illegal('Already started');
         order.startedAt = Date.now();
         return;
@@ -220,19 +267,8 @@ export const wrestling = {
 
       case 'finishOrder': {
         const order = findOrder(state, action.orderId, ctx);
-        // The host can close out a drink too, for when someone's phone dies
-        // mid-countdown and the table has moved on.
-        if (order.playerId !== player.id && !player.isHost) ctx.illegal('That drink is not yours');
-        order.doneAt = Date.now();
-
-        const drinker = ctx.getPlayer(order.playerId);
-        if (drinker) {
-          if (order.down) drinker.downs += 1;
-          else drinker.seconds += order.seconds || 0;
-        }
-        // Settled orders leave the list entirely. The tally and the log are the
-        // record; keeping them here would grow without bound over a long night.
-        v.orders = v.orders.filter((o) => o.id !== order.id);
+        requireController([order], player, ctx);
+        settleOrder(state, order, ctx);
         return;
       }
 
@@ -341,6 +377,8 @@ export const wrestling = {
       titleMatch: !!v.titleMatch,
       houseRules: clone(v.houseRules ?? []),
       vote: clone(v.vote ?? null),
+      lastPlay: clone(v.lastPlay ?? null),
+      eventsLeft: (v.eventPool?.length ?? 0) + (v.eventDiscard?.length ?? 0),
       // What this player may do, computed here so the UI never has to guess.
       // The host checks again when the action comes back, so this list is a
       // convenience for rendering and not a security boundary.
@@ -369,9 +407,75 @@ function findOrder(state, id, ctx) {
   return order;
 }
 
+function findBatch(state, batch, ctx) {
+  const orders = state.vars.orders.filter((o) => o.batch === batch && !o.doneAt);
+  if (!orders.length) ctx.illegal('That drink is no longer outstanding');
+  return orders;
+}
+
+/**
+ * Who may work the clock.
+ *
+ * The player who dealt the drink out runs it — they drew the card, they know
+ * when the room is actually ready. The people drinking can start it themselves
+ * too, and the host can always close one out, so a dead phone never leaves the
+ * table stuck waiting on a countdown nobody can press.
+ */
+function requireController(orders, player, ctx) {
+  const allowed = player.isHost
+    || orders.some((o) => o.from === player.id || o.playerId === player.id);
+  if (!allowed) ctx.illegal('That drink is not yours to run');
+}
+
+function settleOrder(state, order, ctx) {
+  if (order.doneAt) return;
+  order.doneAt = Date.now();
+
+  const drinker = ctx.getPlayer(order.playerId);
+  if (drinker) {
+    if (order.down) drinker.downs += 1;
+    else drinker.seconds += order.seconds || 0;
+  }
+  // Settled orders leave the list entirely. The tally and the log are the
+  // record; keeping them here would grow without bound over a long night.
+  state.vars.orders = state.vars.orders.filter((o) => o.id !== order.id);
+}
+
 function clampSeconds(value) {
   const n = Math.round(Number(value) || 0);
   return Math.min(120, Math.max(0, n));
+}
+
+/**
+ * Take the next Event Card for a hand, recycling the discard pile when the
+ * fresh ones run out. Every play replaces a card now, so over a long night the
+ * pool would otherwise empty and hands would quietly shrink.
+ */
+function drawEvent(state, ctx) {
+  const v = state.vars;
+  if (!v.eventPool.length && v.eventDiscard.length) {
+    v.eventPool = ctx.shuffle(v.eventDiscard);
+    v.eventDiscard = [];
+    ctx.log('Reshuffled the Event Cards');
+  }
+  return v.eventPool.shift() || null;
+}
+
+/**
+ * Who the card would hit if the player just accepts what it says. The picker
+ * opens with these selected, so the common case is one tap.
+ */
+function suggestedTargets(state, actor, target) {
+  if (target === 'choose' || target === 'many' || target === 'vote') return [];
+  try {
+    return resolveTargets(state, actor, target, [], {
+      illegal: (msg) => {
+        throw new Error(msg);
+      },
+    }).map((p) => p.id);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -415,27 +519,42 @@ function resolveTargets(state, actor, target, chosenIds, ctx) {
   }
 }
 
-function applyOutcome(state, actor, outcome, chosenIds, cardTitle, ctx) {
+/**
+ * Apply an outcome and return the players it landed on.
+ *
+ * `allowOverride` is what lets an Event Card go wherever its holder points it:
+ * if they picked names, those win over whatever the card prints. Mini Game
+ * outcomes don't get that — "the person to your right drinks" means exactly
+ * that, and letting the drawer redirect it would be cheating.
+ */
+function applyOutcome(state, actor, outcome, chosenIds, cardTitle, ctx, { allowOverride = false } = {}) {
   const v = state.vars;
+  const picked = Array.isArray(chosenIds) ? chosenIds.filter(Boolean) : [];
 
-  if (outcome.target === 'vote') {
+  if (outcome.target === 'vote' && !(allowOverride && picked.length)) {
     v.vote = { outcome: clone(outcome), by: actor.id, cardTitle, votes: {} };
     ctx.log(`${cardTitle}: the table votes`);
-    return;
+    return [];
   }
 
-  const targets = resolveTargets(state, actor, outcome.target, chosenIds, ctx);
+  const targets = allowOverride && picked.length
+    ? resolveTargets(state, actor, 'many', picked, ctx)
+    : resolveTargets(state, actor, outcome.target, chosenIds, ctx);
 
   // A note-only outcome (creating a house rule, declaring a tag partner) has no
   // drink attached; it just goes in the log so the table has a record.
   if (!outcome.seconds && !outcome.down && !outcome.stopwatch) {
     const who = targets.map((t) => t.name).join(', ');
     ctx.log(`${actor.name}: ${outcome.label}${who && who !== actor.name ? ` → ${who}` : ''}`);
-    return;
+    return targets;
   }
 
+  // One batch per play, so several people going on the clock together share a
+  // single countdown instead of each getting their own.
+  const batch = v.nextBatchId++;
   for (const target of targets) {
     addOrder(state, target, {
+      batch,
       seconds: outcome.seconds ?? null,
       down: !!outcome.down,
       stopwatch: !!outcome.stopwatch,
@@ -443,6 +562,7 @@ function applyOutcome(state, actor, outcome, chosenIds, cardTitle, ctx) {
       from: actor.id,
     }, ctx);
   }
+  return targets;
 }
 
 /**
@@ -480,6 +600,7 @@ function addOrder(state, target, spec, ctx) {
 
   const order = {
     id: v.nextOrderId++,
+    batch: spec.batch ?? v.nextBatchId++,
     playerId,
     seconds: spec.down ? null : seconds,
     down: !!spec.down,
@@ -533,10 +654,12 @@ function closeVoteIfDone(state, ctx) {
 
   const outcome = v.vote.outcome;
   const cardTitle = v.vote.cardTitle;
+  const batch = v.nextBatchId++;
   for (const id of winners) {
     const target = state.players.find((p) => p.id === id);
     if (target) {
       addOrder(state, target, {
+        batch,
         seconds: outcome.seconds,
         down: !!outcome.down,
         label: `${cardTitle} — voted for`,
