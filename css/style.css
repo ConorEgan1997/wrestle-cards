@@ -583,6 +583,139 @@ input::placeholder {
   min-width: 150px;
 }
 
+/* ------------------------- the reveal flash ------------------------ */
+
+/*
+ * A played card is face down until it is answered, so the moment it turns
+ * over is the beat everyone is waiting on. It gets the whole screen for a
+ * few seconds, then settles into the banner.
+ */
+.flash {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 20px var(--gutter) calc(20px + var(--safe-b));
+  background: radial-gradient(120% 80% at 50% 25%, #6b4d12, #241a06 70%, #0d0a02);
+  animation: flash-in 0.3s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+@keyframes flash-in {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+.flash-inner {
+  text-align: center;
+  max-width: 420px;
+}
+
+.flash-inner img {
+  width: min(190px, 46vw);
+  aspect-ratio: var(--card-ratio);
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.6);
+  margin-bottom: 14px;
+}
+
+.flash-who {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #f3d9a4;
+  font-weight: 700;
+}
+
+.flash-card {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 9vw, 2.8rem);
+  line-height: 1.05;
+  text-transform: uppercase;
+  color: #fff;
+  margin-top: 2px;
+}
+
+.flash-result {
+  margin-top: 8px;
+  font-size: 1rem;
+  color: #f3d9a4;
+}
+
+.flash-result.is-countered {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* --------------------------- the stake ----------------------------- */
+
+.stake {
+  text-align: center;
+  padding: 12px;
+  margin: 12px 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.stake-amount {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.stake-note {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.flash-result.is-botched {
+  color: #ffb4b4;
+  font-weight: 700;
+}
+
+/* ------------------------ a card face down ------------------------- */
+
+.pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(100deg, #2b2338, #1c1726);
+  border: 1px solid #4a3b63;
+}
+
+.pending-back {
+  flex: none;
+  width: 34px;
+  height: 46px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(-45deg, #201014, #201014 5px, #2b1418 5px, #2b1418 10px);
+  border: 1px solid var(--red-deep);
+}
+
+.pending-text {
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.pending-text b {
+  color: #c9a6ff;
+}
+
+.pending-text .sub {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
 /* ------------------------ the clock (takeover) --------------------- */
 
 /*
