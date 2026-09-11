@@ -109,12 +109,18 @@ function tag(text, className) {
  * Game
  * ------------------------------------------------------------------ */
 
+/** How long a play stays on everyone's screen before it fades out. */
+export const ANNOUNCE_MS = 9000;
+
 export function renderGame(view, handlers) {
   renderHud(view);
+  renderAnnounce(view);
   renderBanners(view);
-  renderDrinks(view, handlers);
+  renderTimer(view, handlers);
+  renderDrinks(view);
   renderTable(view, handlers);
   renderPlayers(view, handlers);
+  renderDockActions(view, handlers);
   renderHand(view, handlers);
   renderLog(view);
 }
@@ -127,6 +133,47 @@ function renderHud(view) {
     text('span', view.yourTurn ? 'Your turn' : `${current?.name ?? '—'}'s turn`),
     text('span', `Round ${view.round} · ${view.deckCount} Mini Games left`, 'sub'),
   );
+}
+
+/**
+ * "Conor played NO SELL on Jude" — on every device, with the card art.
+ * Re-checked on the tick so it clears itself without another state update.
+ */
+export function renderAnnounce(view) {
+  const slot = document.getElementById('announce');
+  if (!slot) return;
+  const play = view?.lastPlay;
+
+  if (!play || hostNow() - play.at > ANNOUNCE_MS) {
+    if (slot.dataset.showing) {
+      slot.replaceChildren();
+      delete slot.dataset.showing;
+    }
+    return;
+  }
+  // Already on screen for this play — leave it alone so the animation and any
+  // in-progress scroll aren't restarted on every state update.
+  if (slot.dataset.showing === String(play.at)) return;
+  slot.dataset.showing = String(play.at);
+
+  const el = document.createElement('div');
+  el.className = 'announce';
+
+  const img = document.createElement('img');
+  img.src = play.card.image;
+  img.alt = play.card.title;
+  el.append(img);
+
+  const body = document.createElement('div');
+  body.className = 'announce-body';
+  body.append(text('div', `${play.by} played`, 'announce-who'));
+  body.append(text('div', play.card.title, 'announce-card'));
+
+  const on = play.targets?.length ? play.targets.join(', ') : null;
+  body.append(text('div', on ? `on ${on}` : play.outcome, 'announce-target'));
+  el.append(body);
+
+  slot.replaceChildren(el);
 }
 
 function renderBanners(view) {
@@ -142,75 +189,145 @@ function renderBanners(view) {
 }
 
 /**
- * Outstanding drinks. Yours render as a full-width countdown you cannot miss;
- * everyone else's as a quiet line so the table knows who they're waiting on.
+ * Group the outstanding drinks by the play that created them, so "everyone
+ * drinks" is one countdown for the room rather than five separate ones.
  */
-function renderDrinks(view, { onAct }) {
-  const mine = view.orders.filter((o) => o.playerId === view.you?.id);
-  const theirs = view.orders.filter((o) => o.playerId !== view.you?.id);
-
-  const nodes = [];
-
-  for (const order of mine) {
-    const el = document.createElement('div');
-    el.className = 'drink';
-    el.append(text('div', drinkHeadline(order), 'drink-who'));
-    el.append(text('div', order.label, 'drink-why'));
-
-    if (order.down) {
-      el.append(button('Down it — done', () => onAct({ type: 'finishOrder', orderId: order.id })));
-    } else if (!order.startedAt) {
-      el.append(
-        text('div', order.stopwatch ? '0.0' : String(order.seconds), 'countdown', {
-          'data-order': order.id,
-        }),
-      );
-      el.append(button('Start', () => onAct({ type: 'startOrder', orderId: order.id })));
-    } else {
-      el.append(text('div', '', 'countdown', { 'data-order': order.id }));
-      el.append(button('Done', () => onAct({ type: 'finishOrder', orderId: order.id })));
-    }
-    nodes.push(el);
+export function drinkBatches(view) {
+  const map = new Map();
+  for (const order of view.orders ?? []) {
+    if (!map.has(order.batch)) map.set(order.batch, []);
+    map.get(order.batch).push(order);
   }
-
-  for (const order of theirs) {
-    const who = view.players.find((p) => p.id === order.playerId);
-    const el = document.createElement('div');
-    el.className = 'drink is-theirs';
-    el.append(text('div', `${who?.name ?? 'Someone'} — ${drinkHeadline(order)}`, 'drink-who'));
-    el.append(text('div', order.label, 'drink-why'));
-    nodes.push(el);
-  }
-
-  $('drinks').replaceChildren(...nodes);
-  tickCountdowns(view);
+  return [...map.entries()].sort((a, b) => a[0] - b[0]);
 }
 
-function drinkHeadline(order) {
-  if (order.down) return 'Down your drink';
-  if (order.stopwatch) return 'On the clock';
-  return `Drink for ${order.seconds}s`;
+function batchSeconds(orders) {
+  return Math.max(...orders.map((o) => o.seconds || 0));
+}
+
+function batchStartedAt(orders) {
+  const started = orders.map((o) => o.startedAt).filter(Boolean);
+  return started.length ? Math.min(...started) : null;
+}
+
+/** Seconds left on a batch, or null if it hasn't been started. */
+export function batchRemaining(orders) {
+  const startedAt = batchStartedAt(orders);
+  if (!startedAt) return null;
+  const elapsed = (hostNow() - startedAt) / 1000;
+  if (orders.some((o) => o.stopwatch)) return -elapsed; // counts up
+  return Math.max(0, batchSeconds(orders) - elapsed);
 }
 
 /**
- * Re-render just the countdown numbers. Called on every view update and on a
- * 100ms timer, so the digits move smoothly without re-rendering the page.
+ * The clock, full screen, on every device in the room.
+ *
+ * The playtest was clear about this: after the card is resolved the room wants
+ * one big shared timer rather than a banner each. Whoever dealt the drink out
+ * starts it, because they can see whether everyone is actually ready.
+ */
+function renderTimer(view, { onAct }) {
+  const box = $('timer');
+  const batches = drinkBatches(view);
+
+  if (!batches.length) {
+    box.hidden = true;
+    return;
+  }
+
+  const [batch, orders] = batches[0];
+  box.hidden = false;
+
+  const names = orders
+    .map((o) => view.players.find((p) => p.id === o.playerId)?.name ?? 'Someone')
+    .filter((n, i, all) => all.indexOf(n) === i);
+  const everyone = names.length >= view.players.length && view.players.length > 1;
+
+  $('timer-why').textContent = orders[0].label;
+  $('timer-who').textContent = everyone ? 'Everyone' : names.join(' & ');
+  $('timer-what').textContent = orders[0].down
+    ? 'down your drink'
+    : orders[0].stopwatch
+      ? 'on the clock'
+      : `${names.length > 1 || everyone ? 'drink' : 'drinks'} for ${batchSeconds(orders)} seconds`;
+
+  const count = $('timer-count');
+  count.dataset.batch = String(batch);
+  count.hidden = !!orders[0].down;
+  if (!batchStartedAt(orders)) {
+    count.textContent = orders[0].stopwatch ? '0.0' : String(batchSeconds(orders));
+    count.classList.remove('is-up');
+  }
+
+  // Only the player who dealt it out (plus the drinkers and the host) gets the
+  // button; everyone else is told who they're waiting on.
+  const action = view.legalActions.find(
+    (a) => (a.type === 'startBatch' || a.type === 'finishBatch') && a.batch === batch,
+  );
+  const dealer = view.players.find((p) => p.id === orders[0].from);
+
+  if (!action) {
+    $('timer-actions').replaceChildren(
+      text('p', `Waiting for ${dealer?.name ?? 'the table'}…`, 'timer-wait'),
+    );
+    return;
+  }
+
+  const label = action.type === 'startBatch'
+    ? (orders[0].down ? 'Down it' : 'Start')
+    : (orders[0].stopwatch ? 'Stop' : 'Done');
+  $('timer-actions').replaceChildren(
+    button(label, () => onAct({ type: action.type, batch }), 'btn btn-light'),
+  );
+}
+
+/** Any further batches queued behind the one on the clock. */
+function renderDrinks(view) {
+  const rest = drinkBatches(view).slice(1);
+  $('drinks').replaceChildren(
+    ...rest.map(([, orders]) => {
+      const who = orders
+        .map((o) => view.players.find((p) => p.id === o.playerId)?.name ?? 'Someone')
+        .join(', ');
+      const el = document.createElement('div');
+      el.className = 'drink is-theirs';
+      el.append(text('div', `${who} — ${drinkHeadline(orders[0])}`, 'drink-who'));
+      el.append(text('div', orders[0].label, 'drink-why'));
+      return el;
+    }),
+  );
+}
+
+function drinkHeadline(order) {
+  if (order.down) return 'down your drink';
+  if (order.stopwatch) return 'on the clock';
+  return `${order.seconds}s`;
+}
+
+/**
+ * Re-render just the countdown digits. Called on every view update and on a
+ * 100ms timer, so the numbers move smoothly without re-rendering the page.
  */
 export function tickCountdowns(view) {
+  renderAnnounce(view);
   if (!view?.orders) return;
-  for (const el of document.querySelectorAll('.countdown[data-order]')) {
-    const order = view.orders.find((o) => String(o.id) === el.dataset.order);
-    if (!order || !order.startedAt) continue;
 
-    const elapsed = (hostNow() - order.startedAt) / 1000;
-    if (order.stopwatch) {
-      el.textContent = elapsed.toFixed(1);
-      continue;
-    }
-    const left = Math.max(0, order.seconds - elapsed);
-    el.textContent = left > 0 ? left.toFixed(1) : 'GO';
-    el.classList.toggle('is-up', left <= 0);
+  const el = $('timer-count');
+  if (!el || el.hidden) return;
+
+  const batch = Number(el.dataset.batch);
+  const orders = (view.orders ?? []).filter((o) => o.batch === batch);
+  if (!orders.length) return;
+
+  const left = batchRemaining(orders);
+  if (left === null) return; // not started yet
+
+  if (left < 0) {
+    el.textContent = (-left).toFixed(1); // stopwatch counts up
+    return;
   }
+  el.textContent = left > 0 ? left.toFixed(1) : "TIME";
+  el.classList.toggle('is-up', left <= 0);
 }
 
 function renderTable(view, handlers) {
@@ -224,12 +341,7 @@ function renderTable(view, handlers) {
     deck.textContent = `${view.deckCount} Mini Games`;
     area.replaceChildren(deck);
 
-    const canDraw = view.legalActions.some((a) => a.type === 'draw');
-    if (canDraw) {
-      area.append(
-        button('Draw a Mini Game', () => handlers.onAct({ type: 'draw' }), 'btn btn-primary'),
-      );
-    } else {
+    if (!view.legalActions.some((a) => a.type === 'draw')) {
       const who = view.players.find((p) => p.id === view.turn);
       area.append(text('p', `Waiting for ${who?.name ?? 'the next player'} to draw.`, 'table-prompt'));
     }
@@ -243,18 +355,53 @@ function renderTable(view, handlers) {
     text('p', current.card.text, 'card-text'),
   );
 
-  const outcomes = view.legalActions.filter((a) => a.type === 'outcome');
-  if (outcomes.length) {
-    const box = document.createElement('div');
-    box.className = 'outcomes';
-    for (const action of outcomes) {
-      box.append(button(action.label, () => handlers.onOutcome(action), 'btn btn-gold'));
-    }
-    box.append(button('Next player', () => handlers.onAct({ type: 'endTurn' })));
-    area.append(box);
-  } else {
+  if (!view.legalActions.some((a) => a.type === 'outcome')) {
     area.append(text('p', `${drawer?.name ?? 'Someone'} is resolving this one.`, 'table-prompt'));
   }
+}
+
+/**
+ * The buttons live in the dock, not under the card. On a short phone the card
+ * art plus its text is taller than the screen, and buttons in the flow ended up
+ * behind the hand — so whatever you have to press is pinned instead.
+ */
+function renderDockActions(view, handlers) {
+  const dock = $('dock-actions');
+  const outcomes = view.legalActions.filter((a) => a.type === 'outcome');
+
+  if (view.current && outcomes.length) {
+    dock.replaceChildren(
+      ...outcomes.map((action) =>
+        button(action.label, () => handlers.onOutcome(action), 'btn btn-gold'),
+      ),
+      button('Next player', () => handlers.onAct({ type: 'endTurn' })),
+    );
+    return;
+  }
+
+  if (!view.current && view.legalActions.some((a) => a.type === 'draw')) {
+    dock.replaceChildren(
+      button('Draw a Mini Game', () => handlers.onAct({ type: 'draw' }), 'btn btn-primary'),
+    );
+    return;
+  }
+  dock.replaceChildren();
+}
+
+/**
+ * Keep --dock-h in step with however tall the dock actually is, so the page
+ * below always has room to scroll clear of it. The dock grows and shrinks as
+ * buttons come and go, so a fixed guess would be wrong half the time.
+ */
+export function watchDock() {
+  const dock = document.getElementById('dock');
+  if (!dock || typeof ResizeObserver === 'undefined') return;
+  const apply = () => {
+    const height = Math.round(dock.getBoundingClientRect().height);
+    document.documentElement.style.setProperty('--dock-h', `${height}px`);
+  };
+  new ResizeObserver(apply).observe(dock);
+  apply();
 }
 
 function renderPlayers(view, handlers) {
@@ -359,12 +506,17 @@ export function cardSheet(card, actions, { onPick } = {}) {
  * Pick one or more players. `needs` is 1 for a single pick and -1 for any
  * number; the confirm button stays disabled until the selection is valid.
  */
-export function pickerSheet({ title, hint, players, needs = 1, confirmLabel = 'Confirm' }, onDone) {
+export function pickerSheet(
+  { title, hint, players, needs = 1, confirmLabel = 'Confirm', preselected = [] },
+  onDone,
+) {
   return (root, close) => {
     root.append(text('h2', title, 'sheet-title'));
     if (hint) root.append(text('p', hint, 'sheet-text'));
 
-    const chosen = new Set();
+    // Event Cards open with whoever the card names already ticked, so the
+    // common case is one tap on the confirm button.
+    const chosen = new Set(preselected.filter((id) => players.some((p) => p.id === id)));
     const list = document.createElement('div');
     list.className = 'pick-list';
 
@@ -372,7 +524,7 @@ export function pickerSheet({ title, hint, players, needs = 1, confirmLabel = 'C
       close();
       onDone([...chosen]);
     }, 'btn btn-primary');
-    confirm.disabled = true;
+    confirm.disabled = chosen.size === 0;
 
     for (const player of players) {
       const row = document.createElement('button');
@@ -380,6 +532,7 @@ export function pickerSheet({ title, hint, players, needs = 1, confirmLabel = 'C
       row.className = 'pick';
       row.append(text('span', player.name));
       row.append(text('span', player.wrestler || tallyText(player), 'sub'));
+      if (chosen.has(player.id)) row.classList.add('is-picked');
 
       row.addEventListener('click', () => {
         if (needs === 1) {

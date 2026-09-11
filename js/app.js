@@ -9,6 +9,7 @@ import { normaliseCode } from './net.js';
 import { DEFAULT_RULESET, loadDeck, deckLoaded } from './rules/index.js';
 import {
   showScreen, renderLobby, renderGame, tickCountdowns, syncClock,
+  drinkBatches, batchRemaining, watchDock,
   openSheet, closeSheet, sheetIsOpen, cardSheet, pickerSheet, tallySheet,
   toast, text, button,
 } from './ui.js';
@@ -57,8 +58,12 @@ function init() {
 
   // The countdowns need to move between state updates, so they get their own
   // light loop rather than re-rendering the whole screen ten times a second.
-  setInterval(() => tickCountdowns(view), 100);
+  setInterval(() => {
+    tickCountdowns(view);
+    autoFinishExpired();
+  }, 100);
 
+  watchDock();
   route();
 }
 
@@ -161,6 +166,7 @@ function leaveRoom(reason) {
   room = null;
   view = null;
   resultShown = false;
+  finished.clear();
   closeSheet();
   window.location.hash = '';
   showScreen('home');
@@ -206,25 +212,57 @@ function act(action) {
   room?.act(action);
 }
 
+/**
+ * Close a countdown out the moment it hits zero, so nobody has to remember to
+ * tap Done. Only the device that can actually run the clock sends it, and each
+ * batch is only sent once — the host would reject a repeat, but there is no
+ * sense firing a message per tick while the state update is in flight.
+ */
+const finished = new Set();
+
+function autoFinishExpired() {
+  if (!view?.orders?.length) return;
+  for (const [batch, orders] of drinkBatches(view)) {
+    if (finished.has(batch) || orders[0].down || orders[0].stopwatch) continue;
+    const left = batchRemaining(orders);
+    if (left === null || left > 0) continue;
+
+    const canFinish = view.legalActions.some(
+      (a) => a.type === 'finishBatch' && a.batch === batch,
+    );
+    if (!canFinish) continue;
+    finished.add(batch);
+    act({ type: 'finishBatch', batch });
+  }
+}
+
 /* --------------------------- resolving cards -------------------------- */
 
 /**
- * Turn an outcome button into an action. Outcomes that land on a named player
- * ('choose'/'many') open the picker first; everything else the host can work
- * out on its own from the seating.
+ * Turn an outcome button into an action.
+ *
+ * Event Cards always ask who it lands on — the holder decides, and the card's
+ * printed target is only a suggestion, pre-ticked so accepting it is one tap.
+ * Mini Game outcomes are different: "the person to your right drinks" is worked
+ * out from the seating and isn't up for negotiation.
  */
 function resolveOutcome(action) {
+  const isEvent = action.type === 'playEvent';
   const needs = action.needs ?? 0;
-  if (needs === 0) return act(action);
+  if (!isEvent && needs === 0) return act(action);
 
+  const suggested = action.suggested ?? [];
   openSheet(
     pickerSheet(
       {
-        title: needs === 1 ? 'Who?' : 'Who? (pick any number)',
-        hint: action.label,
+        title: 'Who does it hit?',
+        hint: suggested.length
+          ? `${action.label} — tap to change who it lands on.`
+          : action.label,
         players: view.players.filter((p) => p.connected),
-        needs,
-        confirmLabel: 'Send it',
+        needs: isEvent ? -1 : needs,
+        preselected: suggested,
+        confirmLabel: isEvent ? 'Play it' : 'Send it',
       },
       (targets) => act({ ...action, targets }),
     ),
