@@ -1,11 +1,18 @@
-/* ------------------------------------------------------------------ *
- * Tokens
+/* ==================================================================== *
+ * Card Table
  *
- * The card art is dark, heavy and red/gold, and the app gets used in a
- * dim room with the wrestling on. So this commits to one dark theme
- * rather than trying to work in both — a light mode would fight the
- * cards rather than complement them.
- * ------------------------------------------------------------------ */
+ * MOBILE FIRST. Everything outside a media query is the phone layout —
+ * that is the real device, held one-handed, in a dim room, while a match
+ * is on. The @media (min-width: 720px) block at the bottom is the only
+ * place desktop gets a say, and all it does is relax things.
+ *
+ * Two rules drive the phone layout:
+ *   1. Anything you have to tap lives in the bottom third of the screen.
+ *   2. Nothing important requires a scroll to notice.
+ *
+ * The card art is dark, heavy red and gold, so this commits to one dark
+ * theme. A light mode would fight the cards rather than complement them.
+ * ==================================================================== */
 
 :root {
   color-scheme: dark;
@@ -30,6 +37,12 @@
 
   /* Cards are 380x1020 — an unusually tall format, so the ratio is a token. */
   --card-ratio: 380 / 1020;
+
+  /* Measured from the dock at runtime so content always clears it. */
+  --dock-h: 150px;
+
+  --gutter: 12px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
 }
 
 * {
@@ -39,7 +52,7 @@
 /*
  * Several rules below set `display`, which would otherwise beat the `hidden`
  * attribute the JS uses to switch screens — leaving every screen visible at
- * once and an invisible overlay swallowing clicks.
+ * once and an invisible overlay swallowing every tap.
  */
 [hidden] {
   display: none !important;
@@ -56,16 +69,18 @@ body {
   color: var(--ink);
   font-family: var(--font);
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.45;
   -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
+  /* Stops the whole page rubber-banding when a card strip is swiped. */
+  overscroll-behavior-y: contain;
 }
 
 .screen {
   max-width: 900px;
   margin: 0 auto;
-  padding: 16px;
-  padding-block: 20px 64px;
+  padding: var(--gutter);
+  padding-block: 16px 32px;
 }
 
 h1,
@@ -77,7 +92,7 @@ h2 {
 
 h1 {
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 8vw, 3.2rem);
+  font-size: clamp(2rem, 9vw, 3.2rem);
   letter-spacing: 0.02em;
   text-transform: uppercase;
   background: linear-gradient(180deg, #fff 40%, var(--gold));
@@ -88,20 +103,21 @@ h1 {
 
 .masthead {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .tagline {
   color: var(--ink-soft);
   margin: 4px 0 0;
+  font-size: 0.95rem;
 }
 
 .section-title {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--ink-soft);
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   font-weight: 600;
 }
 
@@ -120,14 +136,14 @@ h1 {
   margin-top: 6px;
 }
 
-/* --------------------------- panels + forms ----------------------- */
+/* ------------------------- panels, fields, buttons ------------------ */
 
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px;
+  padding: 16px;
 }
 
 .field {
@@ -137,7 +153,7 @@ h1 {
 
 .field > span {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-soft);
@@ -148,12 +164,15 @@ h1 {
 input[type="text"],
 input[type="number"] {
   width: 100%;
-  padding: 12px;
+  /* 16px minimum, or iOS zooms the page in when the field is focused. */
   font: inherit;
+  font-size: 16px;
+  min-height: 48px;
+  padding: 12px;
   color: var(--ink);
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 input::placeholder {
@@ -170,15 +189,18 @@ input::placeholder {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  /* 48px: a comfortable thumb target, not a mouse one. */
+  min-height: 48px;
   padding: 12px 18px;
   font: inherit;
   font-weight: 600;
   color: var(--ink);
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   text-align: center;
+  touch-action: manipulation;
   transition: transform 0.08s ease, filter 0.15s ease;
 }
 
@@ -209,6 +231,7 @@ input::placeholder {
 }
 
 .btn-quiet {
+  min-height: 40px;
   padding: 8px 12px;
   font-size: 0.85rem;
   background: transparent;
@@ -220,15 +243,11 @@ input::placeholder {
   color: #fff;
 }
 
-.btn-wide {
-  width: 100%;
-}
-
 .divider {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 18px 0;
+  margin: 16px 0;
   color: var(--ink-soft);
   font-size: 0.85rem;
 }
@@ -243,7 +262,7 @@ input::placeholder {
 
 .join-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-end;
 }
 
@@ -252,21 +271,27 @@ input::placeholder {
   margin-bottom: 0;
 }
 
-/* ------------------------------ lobby ----------------------------- */
+#input-code {
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  font-weight: 700;
+}
+
+/* ------------------------------- lobby ----------------------------- */
 
 .code-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 16px;
+  gap: 4px;
+  padding: 14px;
   background: var(--surface-2);
   border-radius: var(--radius);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .code-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--ink-soft);
@@ -274,7 +299,7 @@ input::placeholder {
 
 .code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: clamp(2.4rem, 12vw, 3.4rem);
+  font-size: clamp(2.4rem, 14vw, 3.4rem);
   letter-spacing: 0.18em;
   line-height: 1.1;
   color: var(--gold);
@@ -282,7 +307,7 @@ input::placeholder {
 
 .player-list {
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0 0 14px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -292,10 +317,10 @@ input::placeholder {
 .player-list li {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 10px 12px;
   background: var(--surface-2);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .player-list .who {
@@ -314,14 +339,17 @@ input::placeholder {
   display: block;
   font-size: 0.8rem;
   color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag {
   flex: none;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 3px 8px;
+  padding: 3px 7px;
   border-radius: 99px;
   background: var(--line);
   color: var(--ink-soft);
@@ -340,40 +368,49 @@ input::placeholder {
 
 .lobby-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .lobby-actions .btn {
   flex: 1;
 }
 
-/* ------------------------------- HUD ------------------------------ */
+/* ================================ game ============================== */
 
 .screen-game {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+  /* Clear the dock pinned to the bottom of the screen. */
+  padding-bottom: calc(var(--dock-h) + 16px);
 }
 
+/* The HUD sticks so you always know whose turn it is without scrolling up. */
 .hud {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  margin: -4px calc(var(--gutter) * -1) 0;
+  padding-inline: calc(var(--gutter) + 4px);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
 }
 
 .hud-turn {
   min-width: 0;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.95rem;
 }
 
 .hud-turn .sub {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 400;
   color: var(--ink-soft);
 }
@@ -390,11 +427,11 @@ input::placeholder {
 
 .banner {
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: linear-gradient(90deg, var(--gold-deep), transparent);
   border: 1px solid var(--gold-deep);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
 .house-rule {
@@ -402,7 +439,7 @@ input::placeholder {
   border-left: 3px solid var(--gold);
   background: var(--surface);
   border-radius: 0 8px 8px 0;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   margin-bottom: 6px;
 }
 
@@ -410,12 +447,77 @@ input::placeholder {
   color: var(--gold);
 }
 
-/* ----------------------------- drinks ----------------------------- */
+/* --------------------------- announcement -------------------------- */
+
+/*
+ * When somebody plays an Event Card the whole table needs to see it —
+ * people are watching a match, not the app. This is loud on purpose and
+ * fades itself out after a few seconds.
+ */
+.announce {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: linear-gradient(100deg, var(--gold-deep), #2a2010 70%);
+  border: 1px solid var(--gold);
+  box-shadow: var(--shadow);
+  animation: announce-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+@keyframes announce-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.97);
+  }
+}
+
+.announce img {
+  flex: none;
+  width: 52px;
+  height: 70px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 6px;
+  border: 1px solid rgb(0 0 0 / 0.4);
+}
+
+.announce-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.announce-who {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #f3d9a4;
+  font-weight: 700;
+}
+
+.announce-card {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.announce-target {
+  font-size: 0.85rem;
+  color: #f3d9a4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------ drinks ----------------------------- */
 
 .drink {
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 10px;
+  padding: 14px;
+  margin-bottom: 8px;
   background: linear-gradient(160deg, var(--red), var(--red-deep));
   box-shadow: var(--shadow);
   text-align: center;
@@ -425,28 +527,29 @@ input::placeholder {
   background: var(--surface);
   border: 1px solid var(--line);
   text-align: left;
-  padding: 12px 14px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
 }
 
 .drink-who {
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 1.5rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .drink.is-theirs .drink-who {
   font-family: var(--font);
-  font-size: 1rem;
+  font-size: 0.95rem;
   letter-spacing: 0;
   text-transform: none;
   font-weight: 600;
 }
 
 .drink-why {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   opacity: 0.9;
-  margin: 2px 0 12px;
+  margin: 2px 0 8px;
 }
 
 .drink.is-theirs .drink-why {
@@ -456,11 +559,11 @@ input::placeholder {
 
 .countdown {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: clamp(3rem, 18vw, 5rem);
+  font-size: clamp(2.8rem, 17vw, 4.5rem);
   line-height: 1;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  margin: 6px 0 12px;
+  margin: 4px 0 10px;
 }
 
 .countdown.is-up {
@@ -477,17 +580,98 @@ input::placeholder {
   background: #fff;
   color: #17140c;
   border-color: #fff;
-  min-width: 160px;
+  min-width: 150px;
 }
 
-/* ------------------------------ table ----------------------------- */
+/* ------------------------ the clock (takeover) --------------------- */
+
+/*
+ * When a drink is dealt out this covers the screen on every device in the
+ * room. It is meant to be readable from across a sofa with the telly on.
+ */
+.timer-takeover {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px var(--gutter) calc(24px + var(--safe-b));
+  background: radial-gradient(120% 80% at 50% 30%, var(--red), #4a070c 70%, #1a0305);
+  animation: takeover-in 0.25s ease;
+}
+
+@keyframes takeover-in {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+.timer-inner {
+  text-align: center;
+  max-width: 460px;
+  width: 100%;
+}
+
+.timer-why {
+  font-size: 0.85rem;
+  color: rgb(255 255 255 / 0.7);
+  margin-bottom: 10px;
+}
+
+.timer-who {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 13vw, 4rem);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.timer-what {
+  font-size: 1rem;
+  color: rgb(255 255 255 / 0.85);
+  margin-top: 4px;
+}
+
+.timer-takeover .countdown {
+  font-size: clamp(4rem, 30vw, 8rem);
+  color: #fff;
+  margin: 12px 0 20px;
+  text-shadow: 0 6px 30px rgb(0 0 0 / 0.4);
+}
+
+.timer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.timer-wait {
+  color: rgb(255 255 255 / 0.75);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.btn-light {
+  background: #fff;
+  color: #17140c;
+  border-color: #fff;
+  min-width: 200px;
+  min-height: 56px;
+  font-size: 1.05rem;
+}
+
+/* ------------------------------- table ----------------------------- */
 
 .table-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 18px 14px;
+  gap: 10px;
+  padding: 12px;
   background: radial-gradient(120% 90% at 50% 0%, #24242c, var(--surface));
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -496,6 +680,8 @@ input::placeholder {
 .table-prompt {
   text-align: center;
   color: var(--ink-soft);
+  margin: 0;
+  font-size: 0.9rem;
 }
 
 .outcomes {
@@ -508,7 +694,7 @@ input::placeholder {
 
 .card-title {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   text-align: center;
@@ -517,11 +703,18 @@ input::placeholder {
 .card-text {
   text-align: center;
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   max-width: 420px;
+  margin: 0;
+  /* The full text is on the card art and in the tap-to-open sheet, so three
+     lines is plenty here — it must not push the buttons off screen. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* ------------------------------ cards ----------------------------- */
+/* ------------------------------- cards ----------------------------- */
 
 .card {
   flex: none;
@@ -536,6 +729,7 @@ input::placeholder {
   box-shadow: 0 3px 10px rgb(0 0 0 / 0.5);
   cursor: pointer;
   display: block;
+  touch-action: manipulation;
   transition: transform 0.12s ease;
 }
 
@@ -546,24 +740,29 @@ input::placeholder {
   display: block;
 }
 
-.card:hover,
-.card:focus-visible {
-  transform: translateY(-6px);
+.card:active {
+  transform: scale(0.97);
 }
 
 .card-big {
-  --card-w: min(280px, 72vw);
+  /*
+   * Sized from the height that's actually left, not from the width. A 1:2.7
+   * card at any sensible width is taller than a phone, and the outcome buttons
+   * underneath have to stay clear of the hand pinned to the bottom — so this
+   * budgets ~460px for the HUD, the card's title and text, the buttons and the
+   * hand, and gives the card whatever remains. svh, so an address bar sliding
+   * in doesn't push the buttons under the thumb strip.
+   */
+  --card-w: max(96px, min(230px, 62vw, calc((100svh - var(--dock-h) - 300px) * 0.3725)));
   cursor: default;
 }
 
-.card-big:hover {
+.card-big:active {
   transform: none;
 }
 
 .card-deck {
-  /* The face-down deck is a placeholder, not the thing you're reading — it
-     shouldn't take a full card's height on a phone. */
-  --card-w: 110px;
+  --card-w: 96px;
   display: grid;
   place-items: center;
   background: repeating-linear-gradient(
@@ -575,42 +774,41 @@ input::placeholder {
     );
   border: 1px solid var(--red-deep);
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   text-align: center;
-  padding: 10px;
+  padding: 8px;
 }
 
-.hand {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 4px 2px 10px;
-  scroll-snap-type: x proximity;
-}
-
-.hand .card {
-  --card-w: 118px;
-  scroll-snap-align: start;
-}
-
-/* -------------------------- players strip ------------------------- */
+/* --------------------------- players strip ------------------------- */
 
 .players-strip {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.players-strip::-webkit-scrollbar {
+  display: none;
 }
 
 .player-chip {
+  flex: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 12px;
-  min-width: 104px;
+  gap: 1px;
+  padding: 8px 10px;
+  min-width: 96px;
+  max-width: 140px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .player-chip.is-turn {
@@ -623,34 +821,41 @@ input::placeholder {
 }
 
 .player-chip .n {
-  font-weight: 600;
-}
-
-.player-chip .w {
-  color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.player-chip .w,
+.player-chip .s {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.74rem;
+}
+
+.player-chip .w {
+  color: var(--ink-soft);
+}
+
 .player-chip .s {
   color: var(--gold);
   font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
 }
 
 .badges {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  margin-top: 2px;
 }
 
 .badge {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 99px;
   font-weight: 700;
 }
@@ -665,43 +870,118 @@ input::placeholder {
   color: #fff;
 }
 
-/* -------------------------------- log ----------------------------- */
+/* -------------------------------- hand ----------------------------- */
+
+/*
+ * The dock. Pinned to the bottom at every size — the buttons you have to
+ * press and the cards you have to pick from, always in thumb reach, never
+ * behind anything. The cards are cropped to their top third (the number and
+ * the title banner) because a full 1:2.7 card would eat half the display;
+ * tap one to see it properly.
+ */
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: 8px var(--gutter) calc(8px + var(--safe-b));
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+}
+
+.dock-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dock-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dock-actions:empty {
+  display: none;
+}
+
+.hand-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.hand-head .section-title {
+  margin: 0;
+}
+
+.hand {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.hand::-webkit-scrollbar {
+  display: none;
+}
+
+.hand .card {
+  width: 86px;
+  height: 104px;
+  aspect-ratio: auto;
+  scroll-snap-align: start;
+}
+
+.hand .card img {
+  object-position: top;
+}
+
+/* --------------------------------- log ----------------------------- */
 
 .log-box {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .log-box summary {
   cursor: pointer;
   font-size: 0.85rem;
   color: var(--ink-soft);
+  min-height: 24px;
 }
 
 .log {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   padding: 0;
-  max-height: 220px;
+  max-height: 200px;
   overflow-y: auto;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--ink-soft);
   display: flex;
   flex-direction: column-reverse;
   gap: 5px;
 }
 
-/* ------------------------------ sheet ----------------------------- */
+/* -------------------------------- sheet ---------------------------- */
 
 .sheet-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: 16px;
+  display: flex;
+  /* Sheets rise from the bottom on a phone, where the thumb is. */
+  align-items: flex-end;
+  justify-content: center;
   background: rgb(0 0 0 / 0.75);
   backdrop-filter: blur(3px);
   overflow-y: auto;
@@ -710,22 +990,31 @@ input::placeholder {
 .sheet-body {
   position: relative;
   width: 100%;
-  max-width: 440px;
+  max-width: 460px;
+  max-height: 92vh;
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 16px 16px 0 0;
   box-shadow: var(--shadow);
-  padding: 20px;
-  margin: auto;
+  padding: 18px var(--gutter) calc(18px + var(--safe-b));
+  animation: sheet-in 0.22s ease;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
 }
 
 .sheet-close {
   position: absolute;
-  top: 6px;
-  right: 8px;
-  width: 36px;
-  height: 36px;
-  font-size: 1.6rem;
+  top: 4px;
+  right: 6px;
+  width: 44px;
+  height: 44px;
+  font-size: 1.7rem;
   line-height: 1;
   background: transparent;
   border: 0;
@@ -735,23 +1024,23 @@ input::placeholder {
 
 .sheet-title {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  margin-bottom: 4px;
-  padding-right: 32px;
+  margin-bottom: 2px;
+  padding-right: 44px;
 }
 
 .sheet-text {
   color: var(--ink-soft);
-  font-size: 0.9rem;
-  margin-bottom: 14px;
+  font-size: 0.88rem;
+  margin: 0 0 12px;
 }
 
 .sheet-card {
   display: flex;
   justify-content: center;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .sheet-actions {
@@ -764,7 +1053,7 @@ input::placeholder {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .pick {
@@ -772,24 +1061,28 @@ input::placeholder {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px;
+  min-height: 52px;
+  padding: 10px 12px;
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--ink);
   font: inherit;
   cursor: pointer;
   text-align: left;
+  touch-action: manipulation;
 }
 
 .pick.is-picked {
   border-color: var(--gold);
   background: #2a2313;
+  box-shadow: inset 0 0 0 1px var(--gold);
 }
 
 .pick .sub {
   color: var(--ink-soft);
   font-size: 0.8rem;
+  flex: none;
 }
 
 .tally {
@@ -808,7 +1101,12 @@ input::placeholder {
   gap: 10px;
   padding: 10px 12px;
   background: var(--surface-2);
-  border-radius: 8px;
+  border-radius: 10px;
+}
+
+.tally .sub {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
 }
 
 .tally .amount {
@@ -818,28 +1116,29 @@ input::placeholder {
   flex: none;
 }
 
-/* ------------------------------ toasts ---------------------------- */
+/* -------------------------------- toasts --------------------------- */
 
 .toast-stack {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  /* Above the dock, not behind it. */
+  bottom: calc(var(--dock-h) + 8px);
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   z-index: 60;
-  width: min(440px, calc(100vw - 32px));
+  width: min(440px, calc(100vw - 24px));
   pointer-events: none;
 }
 
 .toast {
-  padding: 12px 14px;
-  border-radius: 8px;
+  padding: 11px 14px;
+  border-radius: 10px;
   background: #26262e;
   border: 1px solid var(--line);
   color: var(--ink);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   box-shadow: var(--shadow);
   animation: rise 0.18s ease;
 }
@@ -856,20 +1155,80 @@ input::placeholder {
   }
 }
 
+/* ==================================================================== *
+ * Wider screens. Everything above is the phone; this only relaxes it.
+ * ==================================================================== */
+
+@media (min-width: 720px) {
+  :root {
+    --gutter: 16px;
+  }
+
+  .screen {
+    padding-block: 24px 48px;
+  }
+
+  .screen-game {
+    gap: 16px;
+    padding-bottom: 48px;
+  }
+
+  .hand .card {
+    width: 104px;
+    height: 124px;
+  }
+
+  .card:hover,
+  .card:focus-visible {
+    transform: translateY(-6px);
+  }
+
+  .card-big {
+    --card-w: 260px;
+  }
+
+  .card-text {
+    font-size: 0.88rem;
+    -webkit-line-clamp: none;
+    display: block;
+  }
+
+  .card-deck {
+    --card-w: 120px;
+  }
+
+  .players-strip {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .announce img {
+    width: 64px;
+    height: 86px;
+  }
+
+  .announce-card {
+    font-size: 1.6rem;
+  }
+
+  /* Centre the sheet instead of docking it to the bottom. */
+  .sheet-backdrop {
+    align-items: center;
+    padding: 16px;
+  }
+
+  .sheet-body {
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
-  }
-}
-
-@media (max-width: 420px) {
-  .hand .card {
-    --card-w: 104px;
-  }
-  .player-chip {
-    min-width: 92px;
   }
 }
