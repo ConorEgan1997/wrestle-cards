@@ -82,6 +82,9 @@
         </div>
       </header>
 
+      <!-- "Conor played NO SELL on Jude" — on everybody's screen. -->
+      <div id="announce"></div>
+
       <div class="banner" id="title-banner" hidden>Title match — penalties doubled</div>
       <div id="house-rules"></div>
 
@@ -96,16 +99,42 @@
         <div class="players-strip" id="players-strip"></div>
       </section>
 
-      <section class="hand-section">
-        <h2 class="section-title">Your Event Cards <span class="muted" id="hand-count"></span></h2>
-        <div class="hand" id="hand"></div>
-      </section>
-
       <details class="log-box">
         <summary>What's happened</summary>
         <ol class="log" id="log"></ol>
       </details>
+
+      <!--
+        The dock: everything you actually tap, pinned to the bottom of the
+        screen within thumb reach, while the table above it scrolls. The
+        outcome buttons live here rather than under the card so they can never
+        end up behind the hand on a short screen.
+      -->
+      <div class="dock" id="dock">
+        <div class="dock-inner">
+          <div class="dock-actions" id="dock-actions"></div>
+          <div class="hand-head">
+            <span class="section-title">Your cards <span class="muted" id="hand-count"></span></span>
+          </div>
+          <div class="hand" id="hand"></div>
+        </div>
+      </div>
     </section>
+
+    <!--
+      The clock. When somebody is put on a drink this takes over every screen
+      in the room, and the player who dealt it out starts it when everyone is
+      actually looking.
+    -->
+    <div class="timer-takeover" id="timer" hidden>
+      <div class="timer-inner">
+        <div class="timer-why" id="timer-why"></div>
+        <div class="timer-who" id="timer-who"></div>
+        <div class="timer-what" id="timer-what"></div>
+        <div class="countdown" id="timer-count"></div>
+        <div class="timer-actions" id="timer-actions"></div>
+      </div>
+    </div>
 
     <!-- ====================== overlay + feedback ======================== -->
     <div class="sheet-backdrop" id="sheet" hidden>
