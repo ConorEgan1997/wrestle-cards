@@ -1,0 +1,12 @@
+{
+  "name": "card-table",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Peer-to-peer multiplayer card game. Static site, no backend.",
+  "scripts": {
+    "start": "node tools/dev-server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser.mjs"
+  }
+}

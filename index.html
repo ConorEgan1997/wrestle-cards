@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Card Table</title>
+    <meta name="description" content="A peer-to-peer wrestling card game you play with friends using a room code." />
+    <meta name="color-scheme" content="dark" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%F0%9F%A4%BC</text></svg>" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+  </head>
+  <body>
+    <!-- ============================== home ============================== -->
+    <section class="screen" id="screen-home">
+      <header class="masthead">
+        <h1>Card Table</h1>
+        <p class="tagline">Start a table, share the code, put the wrestling on.</p>
+      </header>
+
+      <div class="panel">
+        <label class="field">
+          <span>Your name</span>
+          <input id="input-name" type="text" maxlength="20" autocomplete="nickname" placeholder="Conor" />
+        </label>
+
+        <label class="field">
+          <span>Your wrestler</span>
+          <input id="input-wrestler" type="text" maxlength="40" autocomplete="off" placeholder="Who are you backing tonight?" />
+          <small class="note">Loads of Event Cards key off this. Pick before the first bell.</small>
+        </label>
+
+        <button class="btn btn-primary" id="btn-host">Start a table</button>
+
+        <div class="divider"><span>or</span></div>
+
+        <form class="join-row" id="form-join">
+          <label class="field">
+            <span>Room code</span>
+            <input id="input-code" type="text" inputmode="latin" autocapitalize="characters"
+                   autocomplete="off" spellcheck="false" maxlength="12" placeholder="ABCD" />
+          </label>
+          <button class="btn" type="submit" id="btn-join">Join</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============================= lobby ============================== -->
+    <section class="screen" id="screen-lobby" hidden>
+      <header class="masthead"><h1>Waiting room</h1></header>
+
+      <div class="panel">
+        <div class="code-block" id="code-block">
+          <span class="code-label">Room code</span>
+          <strong class="code" id="lobby-code">····</strong>
+          <button class="btn btn-quiet" id="btn-copy">Copy invite link</button>
+        </div>
+
+        <h2 class="section-title">At the table</h2>
+        <ul class="player-list" id="lobby-players"></ul>
+
+        <label class="field lobby-wrestler">
+          <span>Your wrestler</span>
+          <input id="input-wrestler-lobby" type="text" maxlength="40" placeholder="Who are you backing?" />
+        </label>
+
+        <div class="lobby-actions">
+          <button class="btn" id="btn-ready">I'm ready</button>
+          <button class="btn btn-primary" id="btn-start" hidden>Start</button>
+        </div>
+        <p class="hint" id="lobby-hint"></p>
+      </div>
+    </section>
+
+    <!-- ============================== game ============================== -->
+    <section class="screen screen-game" id="screen-game" hidden>
+      <header class="hud">
+        <div class="hud-turn" id="hud-turn"></div>
+        <div class="hud-buttons">
+          <button class="btn btn-quiet" id="btn-tally">Tally</button>
+          <button class="btn btn-quiet" id="btn-menu">More</button>
+        </div>
+      </header>
+
+      <div class="banner" id="title-banner" hidden>Title match — penalties doubled</div>
+      <div id="house-rules"></div>
+
+      <!-- Drinks you owe. Deliberately the loudest thing on the screen. -->
+      <div id="drinks"></div>
+
+      <!-- The Mini Game in play. -->
+      <div id="table-area"></div>
+
+      <section class="strip-section">
+        <h2 class="section-title">The table</h2>
+        <div class="players-strip" id="players-strip"></div>
+      </section>
+
+      <section class="hand-section">
+        <h2 class="section-title">Your Event Cards <span class="muted" id="hand-count"></span></h2>
+        <div class="hand" id="hand"></div>
+      </section>
+
+      <details class="log-box">
+        <summary>What's happened</summary>
+        <ol class="log" id="log"></ol>
+      </details>
+    </section>
+
+    <!-- ====================== overlay + feedback ======================== -->
+    <div class="sheet-backdrop" id="sheet" hidden>
+      <div class="sheet-body" role="dialog" aria-modal="true">
+        <button class="sheet-close" id="sheet-close" aria-label="Close">×</button>
+        <div id="sheet-content"></div>
+      </div>
+    </div>
+
+    <div class="toast-stack" id="toasts" aria-live="polite"></div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

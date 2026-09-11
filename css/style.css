@@ -1,0 +1,875 @@
+/* ------------------------------------------------------------------ *
+ * Tokens
+ *
+ * The card art is dark, heavy and red/gold, and the app gets used in a
+ * dim room with the wrestling on. So this commits to one dark theme
+ * rather than trying to work in both — a light mode would fight the
+ * cards rather than complement them.
+ * ------------------------------------------------------------------ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #0d0d10;
+  --surface: #17171c;
+  --surface-2: #1f1f26;
+  --line: #2e2e38;
+  --ink: #f0ede8;
+  --ink-soft: #9a958d;
+
+  --red: #d3202a;
+  --red-deep: #8d1219;
+  --gold: #d8a13a;
+  --gold-deep: #8a6316;
+  --go: #1f8a4c;
+
+  --radius: 12px;
+  --shadow: 0 2px 4px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Haettenschweiler", "Arial Narrow Bold", Impact, var(--font);
+
+  /* Cards are 380x1020 — an unusually tall format, so the ratio is a token. */
+  --card-ratio: 380 / 1020;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * Several rules below set `display`, which would otherwise beat the `hidden`
+ * attribute the JS uses to switch screens — leaving every screen visible at
+ * once and an invisible overlay swallowing clicks.
+ */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+.screen {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-block: 20px 64px;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 8vw, 3.2rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #fff 40%, var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.masthead {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.tagline {
+  color: var(--ink-soft);
+  margin: 4px 0 0;
+}
+
+.section-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--ink-soft);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.hint,
+.note {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  margin-top: 6px;
+}
+
+/* --------------------------- panels + forms ----------------------- */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.field > span {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+input[type="text"],
+input[type="number"] {
+  width: 100%;
+  padding: 12px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+input::placeholder {
+  color: #66625c;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.08s ease, filter 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.25);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--red), var(--red-deep));
+  border-color: var(--red);
+  color: #fff;
+  width: 100%;
+}
+
+.btn-gold {
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  border-color: var(--gold);
+  color: #17140c;
+}
+
+.btn-quiet {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  background: transparent;
+}
+
+.btn.is-on {
+  background: var(--go);
+  border-color: var(--go);
+  color: #fff;
+}
+
+.btn-wide {
+  width: 100%;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.join-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.join-row .field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* ------------------------------ lobby ----------------------------- */
+
+.code-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+}
+
+.code-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+}
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(2.4rem, 12vw, 3.4rem);
+  letter-spacing: 0.18em;
+  line-height: 1.1;
+  color: var(--gold);
+}
+
+.player-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.player-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+
+.player-list .who {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-list .name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-list .wrestler {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.tag {
+  flex: none;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: var(--line);
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.tag-ready {
+  background: var(--go);
+  color: #fff;
+}
+
+.tag-host {
+  background: var(--gold);
+  color: #17140c;
+}
+
+.lobby-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.lobby-actions .btn {
+  flex: 1;
+}
+
+/* ------------------------------- HUD ------------------------------ */
+
+.screen-game {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.hud-turn {
+  min-width: 0;
+  font-weight: 600;
+}
+
+.hud-turn .sub {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.hud-turn.is-you {
+  color: var(--gold);
+}
+
+.hud-buttons {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--gold-deep), transparent);
+  border: 1px solid var(--gold-deep);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.house-rule {
+  padding: 8px 12px;
+  border-left: 3px solid var(--gold);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.house-rule b {
+  color: var(--gold);
+}
+
+/* ----------------------------- drinks ----------------------------- */
+
+.drink {
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 10px;
+  background: linear-gradient(160deg, var(--red), var(--red-deep));
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.drink.is-theirs {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: left;
+  padding: 12px 14px;
+}
+
+.drink-who {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.drink.is-theirs .drink-who {
+  font-family: var(--font);
+  font-size: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 600;
+}
+
+.drink-why {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin: 2px 0 12px;
+}
+
+.drink.is-theirs .drink-why {
+  margin-bottom: 0;
+  color: var(--ink-soft);
+}
+
+.countdown {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(3rem, 18vw, 5rem);
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin: 6px 0 12px;
+}
+
+.countdown.is-up {
+  animation: pulse 0.6s ease infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.drink .btn {
+  background: #fff;
+  color: #17140c;
+  border-color: #fff;
+  min-width: 160px;
+}
+
+/* ------------------------------ table ----------------------------- */
+
+.table-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 14px;
+  background: radial-gradient(120% 90% at 50% 0%, #24242c, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.table-prompt {
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.card-text {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  max-width: 420px;
+}
+
+/* ------------------------------ cards ----------------------------- */
+
+.card {
+  flex: none;
+  width: var(--card-w, 150px);
+  aspect-ratio: var(--card-ratio);
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.5);
+  cursor: pointer;
+  display: block;
+  transition: transform 0.12s ease;
+}
+
+.card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card:hover,
+.card:focus-visible {
+  transform: translateY(-6px);
+}
+
+.card-big {
+  --card-w: min(280px, 72vw);
+  cursor: default;
+}
+
+.card-big:hover {
+  transform: none;
+}
+
+.card-deck {
+  /* The face-down deck is a placeholder, not the thing you're reading — it
+     shouldn't take a full card's height on a phone. */
+  --card-w: 110px;
+  display: grid;
+  place-items: center;
+  background: repeating-linear-gradient(
+      -45deg,
+      #201014,
+      #201014 8px,
+      #2b1418 8px,
+      #2b1418 16px
+    );
+  border: 1px solid var(--red-deep);
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 10px;
+}
+
+.hand {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  scroll-snap-type: x proximity;
+}
+
+.hand .card {
+  --card-w: 118px;
+  scroll-snap-align: start;
+}
+
+/* -------------------------- players strip ------------------------- */
+
+.players-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.player-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  min-width: 104px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.player-chip.is-turn {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.player-chip.is-offline {
+  opacity: 0.4;
+}
+
+.player-chip .n {
+  font-weight: 600;
+}
+
+.player-chip .w {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-chip .s {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+}
+
+.badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-weight: 700;
+}
+
+.badge-double {
+  background: var(--red);
+  color: #fff;
+}
+
+.badge-cursed {
+  background: #5b2d8e;
+  color: #fff;
+}
+
+/* -------------------------------- log ----------------------------- */
+
+.log-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.log-box summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.log {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 5px;
+}
+
+/* ------------------------------ sheet ----------------------------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.75);
+  backdrop-filter: blur(3px);
+  overflow-y: auto;
+}
+
+.sheet-body {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin: auto;
+}
+
+.sheet-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  font-size: 1.6rem;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.sheet-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+  padding-right: 32px;
+}
+
+.sheet-text {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+}
+
+.sheet-card {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pick.is-picked {
+  border-color: var(--gold);
+  background: #2a2313;
+}
+
+.pick .sub {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.tally {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tally li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+
+.tally .amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  font-weight: 700;
+  flex: none;
+}
+
+/* ------------------------------ toasts ---------------------------- */
+
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 60;
+  width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #26262e;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 0.9rem;
+  box-shadow: var(--shadow);
+  animation: rise 0.18s ease;
+}
+
+.toast.is-error {
+  background: var(--red-deep);
+  border-color: var(--red);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .hand .card {
+    --card-w: 104px;
+  }
+  .player-chip {
+    min-width: 92px;
+  }
+}

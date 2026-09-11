@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Everything resolves as if we were the real page, so card images and
+         module paths work unchanged. -->
+    <base href="../" />
+    <title>Card Table — test harness</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!--
+      Runs a three-player night in a single tab over the loopback transport and
+      renders it through the real UI.
+
+      The markup is lifted out of index.html at load time rather than copied
+      here, so this page cannot drift out of sync with the app it is testing.
+
+      Open it in a browser to eyeball the table without needing three devices;
+      the Playwright test reads window.__harness. ?turns=N plays that many.
+    -->
+    <pre id="result" style="padding: 12px; font: 12px ui-monospace, monospace">running…</pre>
+    <div id="stage"></div>
+
+    <script type="module">
+      import { HostRoom, ClientRoom } from './js/room.js';
+      import { LoopHost, LoopClient } from './js/net.js';
+      import { loadDeck } from './js/rules/index.js';
+      import { renderGame, renderLobby, syncClock, showScreen, tickCountdowns } from './js/ui.js';
+
+      const settle = () => new Promise((r) => setTimeout(r, 12));
+      const checks = [];
+      const check = (name, pass, detail = '') => checks.push({ name, pass, detail: String(detail) });
+
+      try {
+        // Pull the real screens in, minus the app's own bootstrap script.
+        const html = await (await fetch('index.html')).text();
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        parsed.querySelectorAll('script').forEach((s) => s.remove());
+        document.getElementById('stage').append(...parsed.body.children);
+        check('app markup loaded', !!document.getElementById('screen-game'));
+
+        await loadDeck('cards/deck.json');
+
+        let hostView = null;
+        const host = new HostRoom({
+          rulesetId: 'wrestling',
+          Transport: LoopHost,
+          // One tab means one sessionStorage, so the simulated players need
+          // explicit tokens to be treated as three different people.
+          token: 'test-ann',
+          onUpdate: (view) => {
+            hostView = view;
+            syncClock(view.now);
+            showScreen(view.phase === 'lobby' ? 'lobby' : 'game');
+            if (view.phase === 'lobby') {
+              renderLobby(view, { code: host.code, isHost: true, canStart: host.canStart() });
+            } else {
+              renderGame(view, {
+                onAct: (a) => host.act(a),
+                onOutcome: () => {},
+                onShowCard: () => {},
+                onShowPlayer: () => {},
+              });
+            }
+          },
+          onError: (msg) => check('host error', false, msg),
+        });
+
+        const code = await host.open('Ann');
+        host.setProfile({ wrestler: 'Stone Cold' });
+        check('room code issued', /^[A-Z0-9]{4}$/.test(code), code);
+
+        const guests = ['Bob', 'Cat'].map((name) => {
+          const guest = { name, view: null, errors: [] };
+          guest.room = new ClientRoom({
+            Transport: LoopClient,
+            token: `test-${name.toLowerCase()}`,
+            onUpdate: (view) => (guest.view = view),
+            onError: (msg) => guest.errors.push(msg),
+            onClosed: () => {},
+          });
+          return guest;
+        });
+        for (const guest of guests) {
+          await guest.room.join(code, guest.name);
+          guest.room.setProfile({ wrestler: `${guest.name}'s pick` });
+        }
+        await settle();
+
+        check('all three seated', hostView.players.length === 3);
+        check('wrestlers carried across', hostView.players.every((p) => p.wrestler));
+        check('lobby rendered', document.querySelectorAll('#lobby-players li').length === 3);
+
+        host.setReady(true);
+        guests.forEach((g) => g.room.setReady(true));
+        await settle();
+        check('host can start', host.canStart());
+
+        host.start();
+        await settle();
+        check('night under way', hostView.phase === 'playing', hostView.phase);
+        check('four Event Cards each', hostView.players.every((p) => p.hand.length === 4));
+        check('76 Mini Games stacked', hostView.deckCount === 76, hostView.deckCount);
+        check(
+          'a guest sees the same table',
+          guests[0].view.deckCount === 76 && guests[0].view.you.hand.length === 4,
+        );
+
+        // The hand rendered as real card images.
+        const handCards = document.querySelectorAll('#hand .card img');
+        check('hand rendered with card art', handCards.length === 4, handCards.length);
+        check(
+          'card images point at real files',
+          [...handCards].every((img) => /cards\/event-\d\d\.webp$/.test(img.getAttribute('src'))),
+        );
+
+        // Play some turns: draw, take the first outcome, settle every drink.
+        const rooms = { [host.playerId]: host };
+        guests.forEach((g) => (rooms[g.room.playerId] = g.room));
+        const turns = Number(new URLSearchParams(location.search).get('turns')) || 6;
+
+        for (let i = 0; i < turns && hostView.phase === 'playing'; i++) {
+          const seat = rooms[hostView.turn];
+          seat.act({ type: 'draw' });
+          await settle();
+
+          const outcome = hostView.legalActions?.find?.((a) => a.type === 'outcome')
+            ?? host.engine.legalActions(hostView.turn).find((a) => a.type === 'outcome');
+          if (outcome) {
+            const other = hostView.players.find((p) => p.id !== hostView.turn).id;
+            seat.act({
+              type: 'outcome',
+              index: outcome.index,
+              targets: outcome.needs === 0 ? undefined : [other],
+            });
+            await settle();
+          }
+
+          for (const order of [...(host.engine.state.vars.orders || [])]) {
+            const who = rooms[order.playerId];
+            who?.act({ type: 'startOrder', orderId: order.id });
+            who?.act({ type: 'finishOrder', orderId: order.id });
+          }
+          if (host.engine.state.vars.vote) {
+            for (const p of host.engine.state.players) {
+              rooms[p.id]?.act({ type: 'vote', targets: [host.playerId] });
+            }
+          }
+          await settle();
+          rooms[hostView.turn === seat.playerId ? seat.playerId : hostView.turn]
+            ?.act({ type: 'endTurn' });
+          await settle();
+        }
+
+        check('turns were played', hostView.round > 1, `round ${hostView.round}`);
+        check('deck went down', hostView.deckCount < 76, hostView.deckCount);
+        check('game screen is the one on show', !document.getElementById('screen-game').hidden);
+        check('game table rendered', !!document.querySelector('#table-area'));
+        check('player chips rendered', document.querySelectorAll('.player-chip').length === 3);
+        check('log has entries', document.querySelectorAll('#log li').length > 0);
+        check('no errors reached the guests', guests.every((g) => !g.errors.length),
+          guests.flatMap((g) => g.errors).join('; '));
+
+        const drunk = host.engine.state.players.reduce((n, p) => n + p.seconds + p.downs, 0);
+        check('somebody was made to drink', drunk > 0, drunk);
+
+        // Left on the page so the browser test (and a human poking at the
+        // console) can drive the table by hand from here.
+        // app.js owns this loop in the real app; the harness needs its own so
+        // the countdowns actually move here too.
+        setInterval(() => tickCountdowns(hostView), 100);
+
+        window.__host = host;
+        window.__guests = guests;
+      } catch (err) {
+        check('harness ran without throwing', false, err.stack || String(err));
+      }
+
+      const failed = checks.filter((c) => !c.pass);
+      document.getElementById('result').textContent = JSON.stringify(
+        { ok: failed.length === 0, failed: failed.length, checks },
+        null,
+        1,
+      );
+      window.__harness = { ok: failed.length === 0, checks };
+    </script>
+  </body>
+</html>
