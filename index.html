@@ -85,6 +85,9 @@
       <!-- "Conor played NO SELL on Jude" — on everybody's screen. -->
       <div id="announce"></div>
 
+      <!-- A card is face down on the table, waiting to be named or taken. -->
+      <div id="pending"></div>
+
       <div class="banner" id="title-banner" hidden>Title match — penalties doubled</div>
       <div id="house-rules"></div>
 
@@ -120,6 +123,22 @@
         </div>
       </div>
     </section>
+
+    <!--
+      The reveal. Once a face-down card has been named or taken, it turns over
+      on every screen in the room before play carries on.
+    -->
+    <div class="flash" id="flash" hidden>
+      <div class="flash-inner">
+        <img id="flash-art" alt="" />
+        <div class="flash-who" id="flash-who"></div>
+        <div class="flash-card" id="flash-card"></div>
+        <div class="flash-result" id="flash-result"></div>
+      </div>
+    </div>
+
+    <!-- Every Event Card title, for the guess box to complete against. -->
+    <datalist id="event-card-list"></datalist>
 
     <!--
       The clock. When somebody is put on a drink this takes over every screen
