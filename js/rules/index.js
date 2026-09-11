@@ -9,7 +9,7 @@
 
 import { wrestling } from './wrestling.js';
 
-export { loadDeck, setDeck, deckLoaded } from './wrestling.js';
+export { loadDeck, setDeck, deckLoaded, eventCardOptions } from './wrestling.js';
 
 export const RULESETS = [wrestling];
 
