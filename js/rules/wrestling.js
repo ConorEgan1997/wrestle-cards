@@ -21,6 +21,8 @@ import { shuffle } from '../engine.js';
 const HAND_SIZE = 4;
 const DOUBLE_MS = 5 * 60 * 1000; // Botchamania: five minutes of doubled drinks
 const CURSE_COUNT = 3; // You Are Cursed: the next three punishments
+const BOTCH_MULTIPLIER = 2; // call a card wrong and your drink doubles
+const SWAP_SIP_SECONDS = 3; // the cost of binning a card you don't fancy
 
 /** Filled in by loadDeck() before a game starts. */
 let CARDS = [];
@@ -39,6 +41,17 @@ export function setDeck(cards) {
 
 export function deckLoaded() {
   return CARDS.length > 0;
+}
+
+/**
+ * Every Event Card, for the guess box to complete against. The contents of the
+ * pack are public knowledge — what's secret is which of them somebody holds —
+ * so this is safe to hand every client.
+ */
+export function eventCardOptions() {
+  return CARDS.filter((card) => card.deck === 'event')
+    .map(({ id, title, text }) => ({ id, title, text }))
+    .sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /* ------------------------------------------------------------------ */
@@ -77,6 +90,7 @@ export const wrestling = {
       titleMatch: false,
       vote: null, // { orderTemplate, by, votes: {voterId: targetId} }
       houseRules: [], // created by WWE Champion
+      swappedThisTurn: false, // one card swap per turn, and it costs a sip
       nextOrderId: 1,
       nextBatchId: 1,
     };
@@ -95,6 +109,18 @@ export const wrestling = {
 
     if (v.vote) {
       if (!(player.id in v.vote.votes)) actions.push({ type: 'vote', label: 'Cast your vote' });
+      return actions;
+    }
+
+    // A face-down card stops everything else until it is answered.
+    if (v.pending) {
+      if (v.pending.canCounter.includes(player.id) && !v.pending.responses[player.id]) {
+        actions.push({ type: 'guessCard', label: 'Name the card' });
+        actions.push({ type: 'acceptCard', label: 'Take it' });
+      }
+      if (v.pending.by === player.id || player.isHost) {
+        actions.push({ type: 'revealCard', label: 'Turn it over' });
+      }
       return actions;
     }
 
@@ -118,6 +144,11 @@ export const wrestling = {
     // Event Cards are reactive: they can be played on anyone's turn. Whoever
     // plays one always gets to say who it lands on, so every one of these
     // carries the card's natural target as a suggestion the picker starts on.
+    //
+    // Swapping is different — once per turn, on your own turn, and it costs a
+    // sip. That's the price of not being stuck holding a card for an angle
+    // that is never going to come up.
+    const canSwap = isTurn && !v.swappedThisTurn;
     for (const card of player.hand) {
       card.outcomes.forEach((outcome, index) => {
         actions.push({
@@ -130,6 +161,13 @@ export const wrestling = {
           suggested: suggestedTargets(state, player, outcome.target),
         });
       });
+      if (canSwap) {
+        actions.push({
+          type: 'swapCard',
+          cardId: card.id,
+          label: `Bin it and redraw — ${SWAP_SIP_SECONDS}s sip`,
+        });
+      }
     }
 
     // Anyone can hand out a drink at any time — the game has a dozen cards that
@@ -168,6 +206,20 @@ export const wrestling = {
   applyAction(state, player, action, ctx) {
     const v = state.vars;
 
+    /*
+     * legalActions only tells the UI what to draw. This is the part that
+     * actually holds: while a card is face down or the table is voting,
+     * nothing else happens. Running the clock stays allowed throughout, so a
+     * countdown already in flight can never get stranded behind a card.
+     */
+    const CLOCK = ['startBatch', 'finishBatch'];
+    if (v.pending && ![...CLOCK, 'guessCard', 'acceptCard', 'revealCard'].includes(action.type)) {
+      ctx.illegal('There is a card face down — that has to be answered first');
+    }
+    if (v.vote && ![...CLOCK, 'vote'].includes(action.type)) {
+      ctx.illegal('The table is voting');
+    }
+
     switch (action.type) {
       case 'draw': {
         requireTurn(state, player, ctx);
@@ -185,42 +237,120 @@ export const wrestling = {
         if (v.stage !== 'resolve' || !v.current) ctx.illegal('There is no card in play');
         const outcome = v.current.card.outcomes[action.index];
         if (!outcome) ctx.illegal('Unknown outcome');
+        const before = v.nextBatchId;
         applyOutcome(state, player, outcome, action.targets, v.current.card.title, ctx);
         applyCardSideEffects(state, player, v.current.card, action, ctx);
         v.current.resolved = true;
+        // Remember which countdown belongs to this card, so the turn can end
+        // itself when that countdown runs out.
+        if (v.nextBatchId > before) v.current.batch = before;
         return;
       }
 
+      /*
+       * Playing a card doesn't resolve it — it puts it face down on the table.
+       * Whoever it is aimed at gets a shot at naming it first, and only then is
+       * it turned over. That is why hands are secret now.
+       */
       case 'playEvent': {
+        if (v.pending) ctx.illegal('There is already a card on the table');
         const index = player.hand.findIndex((c) => c.id === action.cardId);
         if (index === -1) ctx.illegal('That card is not in your hand');
         const card = player.hand[index];
         const outcome = card.outcomes[action.index];
         if (!outcome) ctx.illegal('Unknown outcome');
 
-        const hit = applyOutcome(state, player, outcome, action.targets, card.title, ctx, {
-          allowOverride: true,
-        });
-        applyCardSideEffects(state, player, card, action, ctx);
+        const targets = resolveTargets(
+          state,
+          player,
+          Array.isArray(action.targets) && action.targets.length ? 'many' : outcome.target,
+          action.targets,
+          ctx,
+        );
 
-        // Every played card leaves the hand and is replaced, one-shot or not.
-        // A hand is always four cards, so there is always something to play.
+        // The card leaves the hand now, so it can't be played twice while the
+        // table is deciding. It is replaced when the card is turned over.
         player.hand.splice(index, 1);
+
+        v.pending = {
+          by: player.id,
+          byName: player.name,
+          card: clone(card),
+          outcomeIndex: action.index,
+          rule: action.rule,
+          targets: targets.map((t) => t.id),
+          // You cannot counter your own card, so a card aimed only at yourself
+          // resolves straight away.
+          canCounter: targets.map((t) => t.id).filter((id) => id !== player.id),
+          responses: {},
+          at: Date.now(),
+        };
+        ctx.log(`${player.name} played a card face down`);
+
+        if (!v.pending.canCounter.length) resolvePending(state, ctx);
+        return;
+      }
+
+      case 'guessCard': {
+        const p = v.pending;
+        if (!p) ctx.illegal('There is no card to counter');
+        if (!p.canCounter.includes(player.id)) ctx.illegal('That card is not aimed at you');
+        if (p.responses[player.id]) ctx.illegal('You have already answered');
+
+        const guessed = matchCard(action.guessId, action.guessText);
+        const correct = !!guessed && guessed === p.card.id;
+        p.responses[player.id] = { type: 'guess', guess: guessed, correct };
+        ctx.log(correct
+          ? `${player.name} called it`
+          : `${player.name} guessed wrong`);
+
+        if (correct || everyoneAnswered(p)) resolvePending(state, ctx);
+        return;
+      }
+
+      case 'acceptCard': {
+        const p = v.pending;
+        if (!p) ctx.illegal('There is no card to accept');
+        if (!p.canCounter.includes(player.id)) ctx.illegal('That card is not aimed at you');
+        p.responses[player.id] = { type: 'accept' };
+        if (everyoneAnswered(p)) resolvePending(state, ctx);
+        return;
+      }
+
+      // For when somebody has put their phone down mid-guess.
+      case 'revealCard': {
+        const p = v.pending;
+        if (!p) ctx.illegal('There is no card on the table');
+        if (p.by !== player.id && !player.isHost) ctx.illegal('Only the player who played it can reveal it');
+        resolvePending(state, ctx);
+        return;
+      }
+
+      /*
+       * Bin a card you don't fancy and take a fresh one. Once per turn, on
+       * your own turn, for a three-second sip — cheap enough to be worth it
+       * for a dead card, dear enough that you can't just cycle your whole hand.
+       */
+      case 'swapCard': {
+        requireTurn(state, player, ctx);
+        if (v.swappedThisTurn) ctx.illegal('You have already swapped a card this turn');
+
+        const index = player.hand.findIndex((c) => c.id === action.cardId);
+        if (index === -1) ctx.illegal('That card is not in your hand');
+
+        const [card] = player.hand.splice(index, 1);
         v.eventDiscard.push(card);
         const replacement = drawEvent(state, ctx);
         if (replacement) player.hand.push(replacement);
+        v.swappedThisTurn = true;
 
-        // What the whole lobby sees. The log alone is too quiet for this —
-        // people are watching a match, not the app.
-        v.lastPlay = {
-          card: clone(card),
-          by: player.name,
-          byId: player.id,
-          outcome: outcome.label,
-          targets: hit.map((t) => t.name),
-          at: Date.now(),
-        };
-        ctx.log(`${player.name} played ${card.title}`);
+        addOrder(state, player, {
+          batch: v.nextBatchId++,
+          seconds: SWAP_SIP_SECONDS,
+          label: 'Swapped a card',
+          from: player.id,
+        }, ctx);
+        ctx.log(`${player.name} binned a card and took a fresh one`);
         return;
       }
 
@@ -285,11 +415,7 @@ export const wrestling = {
         if (v.current && !v.current.resolved) {
           ctx.log(`${v.current.card.title} passed with no penalty`);
         }
-        if (v.current) state.discard.push(v.current.card);
-        v.current = null;
-        v.stage = 'draw';
-        state.round += 1;
-        ctx.advanceTurn();
+        endTurn(state, ctx);
         return;
       }
 
@@ -331,9 +457,12 @@ export const wrestling = {
   },
 
   /**
-   * Everyone can see everyone's Event Cards. They are standing rules the whole
-   * table has to enforce, so hiding them would just mean arguing about what
-   * somebody is holding. The draw pile order stays secret.
+   * Hands are secret. They were public when Event Cards were permanent standing
+   * rules the table had to enforce, but they are one-use plays now and a player
+   * can try to name a card played at them — which would be no trick at all if
+   * everyone could see what everyone was holding.
+   *
+   * The face-down card is secret too, right up until it is turned over.
    */
   viewFor(state, playerId, ctx) {
     const you = state.players.find((p) => p.id === playerId) || null;
@@ -363,7 +492,7 @@ export const wrestling = {
         connected: p.connected,
         ready: p.ready,
         wrestler: p.wrestler || '',
-        hand: clone(p.hand ?? []),
+        handCount: (p.hand ?? []).length,
         seconds: p.seconds ?? 0,
         downs: p.downs ?? 0,
         doubledUntil: v.doubleUntil?.[p.id] || 0,
@@ -378,6 +507,8 @@ export const wrestling = {
       houseRules: clone(v.houseRules ?? []),
       vote: clone(v.vote ?? null),
       lastPlay: clone(v.lastPlay ?? null),
+      canSwap: state.turn === playerId && !v.swappedThisTurn,
+      pending: v.pending ? pendingView(v.pending, playerId) : null,
       eventsLeft: (v.eventPool?.length ?? 0) + (v.eventDiscard?.length ?? 0),
       // What this player may do, computed here so the UI never has to guess.
       // The host checks again when the action comes back, so this list is a
@@ -392,6 +523,39 @@ export const wrestling = {
 /* ------------------------------------------------------------------ *
  * Helpers
  * ------------------------------------------------------------------ */
+
+/**
+ * What a given player may know about the card sitting face down. Nobody sees
+ * the card itself — not even the targets, who are the ones guessing — only who
+ * played it, who it is aimed at, and who has answered so far.
+ */
+function pendingView(pending, playerId) {
+  const outcome = pending.card.outcomes[pending.outcomeIndex];
+  return {
+    by: pending.by,
+    byName: pending.byName,
+    /*
+     * What's riding on it. Shown to everyone so a target can weigh a guess
+     * against taking it — which is the whole point of the risk. It gives away
+     * the size of the drink but not the card: 23 of the 48 Event Cards are a
+     * three-second drink, so it narrows nothing down on its own.
+     */
+    stake: {
+      seconds: outcome.seconds ?? null,
+      down: !!outcome.down,
+      stopwatch: !!outcome.stopwatch,
+      botchMultiplier: BOTCH_MULTIPLIER,
+    },
+    targets: [...pending.targets],
+    canCounter: [...pending.canCounter],
+    youCanCounter: pending.canCounter.includes(playerId) && !pending.responses[playerId],
+    answered: Object.fromEntries(
+      Object.entries(pending.responses).map(([id, r]) => [id, r.type]),
+    ),
+    waitingOn: pending.canCounter.filter((id) => !pending.responses[id]),
+    at: pending.at,
+  };
+}
 
 function requireTurn(state, player, ctx) {
   if (state.turn !== player.id) ctx.illegal('It is not your turn');
@@ -438,7 +602,26 @@ function settleOrder(state, order, ctx) {
   }
   // Settled orders leave the list entirely. The tally and the log are the
   // record; keeping them here would grow without bound over a long night.
-  state.vars.orders = state.vars.orders.filter((o) => o.id !== order.id);
+  const v = state.vars;
+  v.orders = v.orders.filter((o) => o.id !== order.id);
+
+  // When the Mini Game's own countdown runs out, the turn is over — the table
+  // shouldn't have to tap "next player" every single time.
+  const current = v.current;
+  if (current?.resolved && current.batch === order.batch
+      && !v.orders.some((o) => o.batch === order.batch)) {
+    endTurn(state, ctx);
+  }
+}
+
+function endTurn(state, ctx) {
+  const v = state.vars;
+  if (v.current) state.discard.push(v.current.card);
+  v.current = null;
+  v.stage = 'draw';
+  v.swappedThisTurn = false;
+  state.round += 1;
+  ctx.advanceTurn();
 }
 
 function clampSeconds(value) {
@@ -527,7 +710,10 @@ function resolveTargets(state, actor, target, chosenIds, ctx) {
  * outcomes don't get that — "the person to your right drinks" means exactly
  * that, and letting the drawer redirect it would be cheating.
  */
-function applyOutcome(state, actor, outcome, chosenIds, cardTitle, ctx, { allowOverride = false } = {}) {
+function applyOutcome(
+  state, actor, outcome, chosenIds, cardTitle, ctx,
+  { allowOverride = false, penalties = null } = {},
+) {
   const v = state.vars;
   const picked = Array.isArray(chosenIds) ? chosenIds.filter(Boolean) : [];
 
@@ -553,12 +739,18 @@ function applyOutcome(state, actor, outcome, chosenIds, cardTitle, ctx, { allowO
   // single countdown instead of each getting their own.
   const batch = v.nextBatchId++;
   for (const target of targets) {
+    // A doubling only means anything on a timed drink — you can't down a can
+    // twice — so a botched call on a "down your drink" card is recorded but
+    // costs nothing extra.
+    const multiplier = penalties?.[target.id] ?? 1;
+    const doubled = multiplier > 1 && outcome.seconds;
+
     addOrder(state, target, {
       batch,
-      seconds: outcome.seconds ?? null,
+      seconds: outcome.seconds != null ? outcome.seconds * multiplier : null,
       down: !!outcome.down,
       stopwatch: !!outcome.stopwatch,
-      label: `${cardTitle} — ${outcome.label}`,
+      label: `${cardTitle} — ${outcome.label}${doubled ? ' (botched counter, doubled)' : ''}`,
       from: actor.id,
     }, ctx);
   }
@@ -616,6 +808,97 @@ function addOrder(state, target, spec, ctx) {
   const amount = order.down ? 'downs their drink' : order.stopwatch ? 'is on the clock' : `drinks ${order.seconds}s`;
   ctx.log(`${name} ${amount} — ${spec.label}`);
   return order;
+}
+
+function everyoneAnswered(pending) {
+  return pending.canCounter.every((id) => pending.responses[id]);
+}
+
+/** Loose match so "no sell" finds NO SELL! whether picked from the list or typed. */
+function matchCard(guessId, guessText) {
+  if (guessId && CARDS.some((c) => c.id === guessId)) return guessId;
+
+  const wanted = normalise(guessText);
+  if (!wanted) return null;
+  const hit = CARDS.find((c) => c.deck === 'event' && normalise(c.title) === wanted);
+  return hit ? hit.id : null;
+}
+
+function normalise(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Turn the face-down card over and apply it.
+ *
+ * A correct guess turns the card back on whoever played it — they get the
+ * drink they were dishing out. Everything else lands as played.
+ */
+function resolvePending(state, ctx) {
+  const v = state.vars;
+  const p = v.pending;
+  if (!p) return;
+
+  const player = ctx.getPlayer(p.by);
+  const card = p.card;
+  const outcome = card.outcomes[p.outcomeIndex];
+
+  const caller = p.canCounter
+    .map((id) => ({ id, response: p.responses[id] }))
+    .find((entry) => entry.response?.correct);
+
+  const landsOn = caller ? [p.by] : p.targets;
+
+  /*
+   * A botched counter costs you. Calling the card wrong doubles your own
+   * drink — that is the risk that makes guessing a decision rather than a
+   * free roll. It only bites when the card actually lands on the targets: if
+   * somebody else called it right, the whole table is off the hook.
+   */
+  const botched = {};
+  if (!caller) {
+    for (const id of p.canCounter) {
+      if (p.responses[id]?.type === 'guess') botched[id] = BOTCH_MULTIPLIER;
+    }
+  }
+
+  const hit = applyOutcome(state, player, outcome, landsOn, card.title, ctx, {
+    allowOverride: true,
+    penalties: botched,
+  });
+  applyCardSideEffects(state, player, card, { targets: landsOn, rule: p.rule }, ctx);
+
+  // Only now does the card go to the discard and the hand get topped back up.
+  v.eventDiscard.push(card);
+  const replacement = drawEvent(state, ctx);
+  if (replacement && player) player.hand.push(replacement);
+
+  const callerName = caller ? ctx.getPlayer(caller.id)?.name : null;
+  const botchedNames = Object.keys(botched).map((id) => ctx.getPlayer(id)?.name).filter(Boolean);
+
+  v.lastPlay = {
+    card: clone(card),
+    by: p.byName,
+    byId: p.by,
+    outcome: outcome.label,
+    targets: hit.map((t) => t.name),
+    counteredBy: callerName,
+    botched: botchedNames,
+    at: Date.now(),
+  };
+
+  if (callerName) {
+    ctx.log(`${callerName} called ${card.title} — it lands on ${p.byName}`);
+  } else if (botchedNames.length) {
+    ctx.log(`Botched counter: ${botchedNames.join(', ')} — ${card.title}, doubled`);
+  } else {
+    ctx.log(`${p.byName} played ${card.title}`);
+  }
+
+  v.pending = null;
 }
 
 /** The handful of Event Cards that change the state of the night, not just drinks. */
