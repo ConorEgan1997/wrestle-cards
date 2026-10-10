@@ -95,10 +95,38 @@ export class HostRoom {
     });
   }
 
-  async open(hostName) {
-    this.code = await this.transport.start();
+  /**
+   * Open a table.
+   *
+   * `screen: true` makes this device the table rather than a player at it —
+   * the laptop on the coffee table, or the TV. It still runs the engine and
+   * holds the room code; it just isn't dealt in and never takes a turn.
+   */
+  async open(hostName, { screen = false } = {}) {
     this.playerId = this.token ?? myIdentity().token;
-    this.engine.addPlayer({ id: this.playerId, name: hostName, isHost: true });
+    this.engine.addPlayer({
+      id: this.playerId,
+      name: hostName || (screen ? 'The screen' : 'Host'),
+      isHost: true,
+      screen,
+    });
+    if (screen) this.engine.setReady(this.playerId, true);
+    this.#publish();
+
+    /*
+     * The code comes last and is allowed to fail. A table round one screen
+     * is playable with no network at all — phones joining later is a bonus,
+     * not a precondition — so a broker that is down or blocked must not stop
+     * the night starting.
+     */
+    try {
+      this.code = await this.transport.start();
+    } catch (err) {
+      if (!screen) throw err;
+      // Not an error: a table round one screen is the whole game. It is
+      // noted once, quietly, rather than toasted red on every state update.
+      this.noCode = true;
+    }
     this.#publish();
     return this.code;
   }
@@ -151,6 +179,55 @@ export class HostRoom {
     const result = this.engine.dispatch(this.playerId, action);
     if (!result.ok) this.onError?.(result.error);
     this.#publish();
+  }
+
+  /**
+   * Take an action on behalf of a seat with no phone behind it.
+   *
+   * This is how a shared screen plays: the seats round the table have no
+   * device of their own, so the screen acts as each of them in turn. It is
+   * deliberately limited to seats marked `local` — the host cannot reach
+   * over and play somebody's actual phone, which would make every hidden
+   * hand in the game a lie.
+   */
+  actAs(playerId, action) {
+    const player = this.engine.getPlayer(playerId);
+    if (!player?.local) {
+      this.onError?.('That seat is being played from a phone');
+      return;
+    }
+    const result = this.engine.dispatch(playerId, action);
+    if (!result.ok) this.onError?.(result.error);
+    this.#publish();
+  }
+
+  /**
+   * Add a seat for somebody in the room who is not on a phone.
+   *
+   * Names only — no token, no connection. The id is namespaced so it can
+   * never collide with a real identity token.
+   */
+  addLocalSeat(name) {
+    const id = `local:${crypto.randomUUID()}`;
+    try {
+      this.engine.addPlayer({ id, name: sanitiseName(name), local: true });
+    } catch (err) {
+      this.onError?.(err.message);
+      return null;
+    }
+    this.#publish();
+    return id;
+  }
+
+  removeLocalSeat(playerId) {
+    const player = this.engine.getPlayer(playerId);
+    if (!player?.local) return;
+    this.engine.state.players = this.engine.state.players.filter((p) => p.id !== playerId);
+    this.#publish();
+  }
+
+  get localSeats() {
+    return this.engine.state.players.filter((p) => p.local);
   }
 
   chat(text) {
@@ -209,18 +286,36 @@ export class HostRoom {
       return this.transport.send(connId, { t: 'error', message: 'Malformed join request', fatal: true });
     }
     try {
-      const player = this.engine.addPlayer({ id: token, name: sanitiseName(msg.name) });
-      this.seats.set(connId, token);
+      const player = typeof msg.claim === 'string'
+        ? this.#claimSeat(msg.claim, token, sanitiseName(msg.name))
+        : this.engine.addPlayer({ id: token, name: sanitiseName(msg.name) });
+      this.seats.set(connId, player.id);
       this.transport.send(connId, {
         t: 'welcome',
-        playerId: token,
+        playerId: player.id,
         code: this.code,
-        view: this.engine.viewFor(token),
+        view: this.engine.viewFor(player.id),
       });
       this.#publish();
     } catch (err) {
       this.transport.send(connId, { t: 'error', message: err.message, fatal: true });
     }
+  }
+
+  /**
+   * A phone taking over a seat that the shared screen has been playing.
+   *
+   * The seat keeps its name, its place in the turn order and everything it
+   * has drunk so far — it is the same player, now with somewhere private to
+   * hold cards — so it is dealt a hand on the spot if the night is under
+   * way. Taking over a seat that already has a phone is refused: that is
+   * somebody else's hand.
+   */
+  #claimSeat(seatId, token, name) {
+    if ([...this.seats.values()].includes(seatId)) {
+      throw new Error('Somebody is already playing that seat');
+    }
+    return this.engine.claimSeat(seatId, token, name);
   }
 
   #handleDisconnect(connId) {

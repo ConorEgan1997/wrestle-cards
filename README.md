@@ -21,6 +21,21 @@ set (478) prints its rule on the art, so those cards carry a title, a number
 and their outcome buttons, and the rule itself is read off the card — which is
 why tapping a card to read it matters more than it used to.
 
+There are two ways to play it:
+
+- **Round one screen.** No phones, no room code. Type everyone's names into a
+  laptop or a TV, and the screen deals, shows the card and runs the clock for
+  whoever is up. Mini Games only — 430 of them — because there is nowhere
+  private to hold a hand when everyone is looking at the same display.
+- **A phone each.** One player starts a table and gets a four-letter code;
+  everyone else joins from their own phone and holds a hand of cards they can
+  play, counter and bluff with. This is the full game.
+
+They are the same night, not two apps, and you can start with the first and
+move to the second: anyone who wants a hand joins with the code **mid-game**
+and is dealt in where they sit, keeping their turn and everything they have
+already drunk. The seats still without a phone carry on with the Mini Games.
+
 ---
 
 ## How a night works
@@ -68,6 +83,25 @@ all if everyone could see who was holding what. What *is* public is the pack:
 every Event Card's name and text, which is what the guess box completes
 against. The secret is only ever who holds which.
 
+### Round one screen
+
+Press **Play on this screen**, type the names in the order people are sitting
+— that order is the game, half the deck says "the person to your left" — and
+start. The shared screen then shows whose go it is and offers that seat's
+buttons with their name on them, so nobody is hunting for which phone is
+supposed to tap what.
+
+At TV shape it lays itself out sideways: the card at full height with its rule
+set beside it in large type, the table along the bottom, and the countdown
+filling the whole screen when somebody owes a drink. The whole game sits in one
+screenful — nobody scrolls a television — and there's a browser test that fails
+if it ever stops doing so.
+
+A room code still appears if the broker answers, so phones can join later, but
+**Start never waits on it**: a dead broker costs you the phones and nothing
+else. The screen itself is not a player — it deals and displays, takes no turn,
+and never shows up in the tally.
+
 ### Tonight's rules
 
 The host sets these in the lobby and they lock when play starts. Everyone sees
@@ -103,6 +137,34 @@ refuses any key it doesn't know and any value not on the list, so a client
 can't invent an option or set a real one to something the rules have never
 seen.
 
+### When it gets stuck
+
+A room full of people with drinks in their hands will put a phone down
+mid-turn, and that used to leave the whole table with nothing to press: only
+the player on the clock can draw or end their turn, a face-down card freezes
+everyone, and a vote freezes everyone twice over.
+
+So there is one action that clears whatever is actually in the way, and it says
+which:
+
+| What's blocking | What the button says | What it does |
+| --- | --- | --- |
+| A vote nobody finishes | **Call the vote** | Counts the votes already cast |
+| A face-down card whose target has wandered off | **Turn the card over** | Lands it as played |
+| A turn nobody moves | **Skip Jude** | Ends the turn and moves on |
+
+Three things keep it honest. It **never cancels a drink** — you cannot tap your
+way out of what you owe. It does **one thing per tap**, and the log names
+whoever pressed it, which is the real check on it. And for anyone other than
+the host and the person being waited on, it only appears after **45 seconds**:
+ungated, it is just a button for skipping somebody's turn or denying them a
+counter, which is exactly what the rest of the rules are careful not to allow.
+
+"Next player" opens up the same way — the host can always use it, anyone can
+once the turn-holder drops off, and it is there before you have drawn so a turn
+you want to pass isn't a dead end. Drink timers too: if the dealer and the
+drinker have both vanished, anyone can close the batch out.
+
 ### What it does handle
 
 - **Drink timers.** One countdown for the whole room, corrected for clock drift
@@ -133,6 +195,28 @@ seen.
   so on its own it narrows nothing down. A botched call doubles a timed drink; you can't down a
   can twice, so on a "down your drink" card the botch is recorded and costs
   nothing extra.
+- **Getting unstuck.** A room full of people with drinks in their hands will
+  put a phone down mid-turn, and that used to be able to freeze the table:
+  only the player on the clock could draw or end their turn, a face-down card
+  froze everyone until its targets answered, and a vote froze everyone until
+  the last person voted. Now there is always a way out, labelled with what it
+  will actually do — *Skip Bob*, *Turn the card over*, *Call the vote* —
+  sitting in the dock when there is nothing else to press, and at the top of
+  the More menu.
+
+  **It never cancels a drink.** A face-down card lands exactly as it was
+  played, a vote is counted on the votes already cast, and anything already
+  owed stays owed. It clears one blocker per tap rather than running the
+  night, and the log names whoever pressed it.
+
+  **Who gets it, and when.** Whoever the table is waiting on gets it straight
+  away — it is their turn, their card. So does the host, who can move the
+  night on past anyone. Everyone else waits **45 seconds** first, or no time
+  at all if the player in question has dropped off the table. That wait is
+  the point of the design: without it the button is simply a way to skip
+  somebody's turn, or to force a card over before its target has had a chance
+  to counter, which is the one thing the rest of the rules are careful not to
+  allow.
 - **The tally.** Seconds drunk, drinks downed and shots taken per player, so
   "the worst performer of the game so far" has an answer. The engine always
   records seconds, even in sips mode, so the numbers stay comparable between
@@ -248,7 +332,8 @@ drops out; the cards go peer to peer.
 ### The trade-offs
 
 - **If the host closes their tab, the night ends** for everyone. There is no
-  host migration. Whoever is least likely to wander off should host.
+  host migration. Whoever is least likely to wander off should host. (Any
+  *other* phone going quiet is survivable — see *Getting unstuck*.)
 - A refresh is fine — your seat, hand and tally come back, because the identity
   token survives a reload.
 - Codes are four characters so two tables *could* collide; the host silently
@@ -265,13 +350,13 @@ only file that knows about WebRTC.
 ## The files
 
 ```
-index.html                markup for the three screens
+index.html                markup for the four screens
 css/style.css             styling — one dark theme, to match the card art
 js/app.js                 wiring: routing, screens, prompts
 js/ui.js                  rendering — pure functions of the view
 js/room.js                the protocol: HostRoom, ClientRoom, identity
 js/net.js                 transports: PeerJS, plus a loopback one for tests
-js/engine.js              the generic engine — decks, hands, turns, redaction
+js/engine.js              the generic engine — decks, hands, turns, seats, redaction
 js/cards.js               card helpers (used by the engine's test fixture)
 js/rules/wrestling.js     this game's rules
 js/rules/index.js         the ruleset registry
@@ -366,8 +451,8 @@ Run it after any change to the sheets.
 ## Tests
 
 ```bash
-npm test              # 117 unit, protocol and deck tests
-npm run test:browser  # 75 checks in a real browser (needs playwright)
+npm test              # 140 unit, protocol and deck tests
+npm run test:browser  # 100 checks in a real browser (needs playwright)
 npm run verify:cards  # every image shows the card its filename claims
 ```
 

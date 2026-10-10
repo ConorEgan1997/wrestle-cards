@@ -47,6 +47,19 @@ function giveCard(engine, playerId, cardId) {
   return card;
 }
 
+/**
+ * Wind back whatever the table is currently stuck on, so the wait before an
+ * uninvolved player may move the game on has already passed. Nobody wants a
+ * 45-second test.
+ */
+function goStale(engine, ms = 60_000) {
+  const v = engine.state.vars;
+  if (v.vote) v.vote.at -= ms;
+  else if (v.pending) v.pending.at -= ms;
+  else v.turnAt -= ms;
+  return engine;
+}
+
 const ok = (result) => {
   assert.equal(result.ok, true, result.error);
   return result;
@@ -939,8 +952,215 @@ test('a face-down card stops the rest of the game until it is settled', () => {
   ok(engine.dispatch('p0', { type: 'playEvent', cardId: 'event-24', index: 0, targets: ['p1'] }));
 
   assert.deepEqual(engine.legalActions('p1').map((a) => a.type), ['guessCard', 'acceptCard']);
+  // Cat is not a target and has nothing to answer. She gets nothing at all
+  // to start with — the way out only appears once the table has waited.
   assert.deepEqual(engine.legalActions('p2').map((a) => a.type), []);
+  assert.deepEqual(goStale(engine).legalActions('p2').map((a) => a.type), ['unstick']);
   assert.equal(engine.dispatch('p0', { type: 'draw' }).ok, false);
+});
+
+/* ------------------------------ unsticking ---------------------------- */
+
+/*
+ * A room full of people with drinks in their hands will put a phone down
+ * mid-turn. These are the states that used to leave the whole table with
+ * nothing to press.
+ */
+
+test('a sleeping phone on its own turn no longer freezes the table', () => {
+  const engine = newGame();
+  // Ann's turn; Ann has wandered off without drawing.
+  assert.equal(engine.state.turn, 'p0');
+  assert.deepEqual(engine.legalActions('p1').filter((a) => a.type === 'draw'), []);
+
+  const out = goStale(engine).legalActions('p1').find((a) => a.type === 'unstick');
+  assert.ok(out, 'Bob has a way out');
+  assert.equal(out.label, 'Skip Ann', 'and it says what it will do');
+
+  ok(engine.dispatch('p1', out));
+  assert.equal(engine.state.turn, 'p1', 'play moved on');
+  assert.equal(engine.state.vars.stage, 'draw');
+  assert.match(engine.state.log.at(-1).message, /Bob moved the game on past Ann/);
+});
+
+test('unsticking a face-down card lands it as played — it is not an escape', () => {
+  const engine = newGame();
+  giveCard(engine, 'p0', 'event-24'); // Heel Turn — 3 seconds
+  ok(engine.dispatch('p0', { type: 'playEvent', cardId: 'event-24', index: 0, targets: ['p1'] }));
+
+  // Cat is waiting on Bob, who is not answering.
+  const out = goStale(engine).legalActions('p2').find((a) => a.type === 'unstick');
+  assert.equal(out.label, 'Turn the card over');
+  ok(engine.dispatch('p2', out));
+
+  assert.equal(engine.state.vars.pending, null);
+  assert.equal(engine.state.vars.orders.at(-1).playerId, 'p1', 'Bob still owes the drink');
+  assert.ok(!engine.state.vars.lastPlay.counteredBy);
+});
+
+test('a target cannot unstick their own card — they have their own buttons', () => {
+  const engine = newGame();
+  giveCard(engine, 'p0', 'event-24');
+  ok(engine.dispatch('p0', { type: 'playEvent', cardId: 'event-24', index: 0, targets: ['p1'] }));
+
+  assert.deepEqual(engine.legalActions('p1').map((a) => a.type), ['guessCard', 'acceptCard']);
+});
+
+test('a vote nobody finishes is settled on the votes that were cast', () => {
+  const engine = newGame();
+  ok(engine.dispatch('p0', { type: 'draw' }));
+  engine.state.vars.current.card = deckCard('mini-56'); // Taboo Tuesday
+  ok(engine.dispatch('p0', { type: 'outcome', index: 0 }));
+
+  ok(engine.dispatch('p0', { type: 'vote', targets: ['p1'] }));
+  ok(engine.dispatch('p2', { type: 'vote', targets: ['p1'] }));
+  assert.ok(engine.state.vars.vote, 'still waiting on Bob');
+
+  const out = goStale(engine).legalActions('p2').find((a) => a.type === 'unstick');
+  assert.equal(out.label, 'Call the vote');
+  ok(engine.dispatch('p2', out));
+
+  assert.equal(engine.state.vars.vote, null);
+  assert.equal(engine.state.vars.orders.at(-1).playerId, 'p1', 'the two votes stand');
+  assert.match(engine.state.log.at(-2).message, /counting the 2 in/);
+});
+
+test('a vote with no votes at all is dropped rather than invented', () => {
+  const engine = newGame();
+  ok(engine.dispatch('p0', { type: 'draw' }));
+  engine.state.vars.current.card = deckCard('mini-56');
+  ok(engine.dispatch('p0', { type: 'outcome', index: 0 }));
+
+  goStale(engine);
+  ok(engine.dispatch('p1', engine.legalActions('p1').find((a) => a.type === 'unstick')));
+  assert.equal(engine.state.vars.vote, null);
+  assert.equal(engine.state.vars.orders.length, 0, 'nobody is made to drink on no votes');
+});
+
+test('one tap clears one blocker, not the whole night', () => {
+  const engine = newGame();
+  giveCard(engine, 'p0', 'event-24');
+  ok(engine.dispatch('p0', { type: 'playEvent', cardId: 'event-24', index: 0, targets: ['p1'] }));
+
+  const turn = engine.state.turn;
+  ok(goStale(engine).dispatch('p2', { type: 'unstick' }));
+  assert.equal(engine.state.vars.pending, null, 'the card went over');
+  assert.equal(engine.state.turn, turn, 'but the turn did not also skip');
+});
+
+/*
+ * The flip side. An unstick button with no gate on it is just a button that
+ * skips somebody's turn, or denies a target the chance to counter — which is
+ * the one thing the rest of these rules are careful not to allow.
+ */
+test('you cannot skip somebody the moment their turn starts', () => {
+  const engine = newGame({ players: ['Ann', 'Bob', 'Cat', 'Dee'] });
+  engine.state.turn = 'p1';
+  engine.state.vars.turnAt = Date.now();
+
+  assert.deepEqual(engine.legalActions('p2').filter((a) => a.type === 'unstick'), []);
+  const refused = engine.dispatch('p2', { type: 'unstick' });
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /moment/i);
+  assert.equal(engine.state.turn, 'p1', 'Bob still has his turn');
+
+  // ...but the table does not wait forever.
+  assert.ok(goStale(engine).legalActions('p2').some((a) => a.type === 'unstick'));
+});
+
+test('nor force a card over before its target has had a chance to answer', () => {
+  const engine = newGame({ players: ['Ann', 'Bob', 'Cat', 'Dee'] });
+  giveCard(engine, 'p0', 'event-24');
+  ok(engine.dispatch('p0', { type: 'playEvent', cardId: 'event-24', index: 0, targets: ['p1'] }));
+
+  const refused = engine.dispatch('p3', { type: 'unstick' });
+  assert.equal(refused.ok, false, 'Dee has no business rushing Bob');
+  assert.ok(engine.state.vars.pending, 'the card is still face down');
+
+  // The player who played it never waits — it is their card.
+  ok(engine.dispatch('p0', { type: 'unstick' }));
+  assert.equal(engine.state.vars.pending, null);
+});
+
+test('an empty seat is not worth waiting on', () => {
+  const engine = newGame();
+  engine.state.turn = 'p1';
+  engine.state.vars.turnAt = Date.now();
+  engine.getPlayer('p1').connected = false;
+
+  // No 45 seconds for a player who has left: Cat can move it on at once.
+  const out = engine.legalActions('p2').find((a) => a.type === 'unstick');
+  assert.ok(out, 'no waiting on a dropped player');
+  ok(engine.dispatch('p2', out));
+  assert.notEqual(engine.state.turn, 'p1');
+});
+
+test('the host can move the night on past anyone, awake or not', () => {
+  const engine = newGame();
+  engine.state.turn = 'p1'; // Bob's turn, Ann is host
+  ok(engine.dispatch('p0', { type: 'endTurn' }));
+  assert.equal(engine.state.turn, 'p2');
+  assert.match(engine.state.log.at(-1).message, /Ann moved the game on past Bob/);
+});
+
+test('but an ordinary player cannot end a turn that is being played', () => {
+  const engine = newGame({ players: ['Ann', 'Bob', 'Cat', 'Dee'] });
+  engine.state.turn = 'p1';
+  const result = engine.dispatch('p2', { type: 'endTurn' });
+  assert.equal(result.ok, false, 'Cat cannot skip Bob while Bob is there');
+
+  // ...until Bob drops off the table.
+  engine.getPlayer('p1').connected = false;
+  ok(engine.dispatch('p2', { type: 'endTurn' }));
+  assert.equal(engine.state.turn, 'p2');
+});
+
+test('a drink whose dealer and drinker have both gone can still be cleared', () => {
+  const engine = newGame({ players: ['Ann', 'Bob', 'Cat', 'Dee'] });
+  engine.state.turn = 'p1';
+  giveCard(engine, 'p1', 'event-24');
+  playCard(engine, 'p1', 'event-24', { targets: ['p2'] });
+
+  const { batch } = engine.state.vars.orders.at(-1);
+  // Dee is neither the dealer, the drinker, nor the host.
+  assert.equal(engine.dispatch('p3', { type: 'startBatch', batch }).ok, false);
+
+  engine.getPlayer('p0').connected = false; // the host
+  engine.getPlayer('p1').connected = false; // who dealt it
+  engine.getPlayer('p2').connected = false; // who owes it
+  ok(engine.dispatch('p3', { type: 'startBatch', batch }));
+  ok(engine.dispatch('p3', { type: 'finishBatch', batch }));
+  assert.equal(engine.getPlayer('p2').seconds, 3, 'and it still counts');
+});
+
+test('there is always something to press, in every state of the game', () => {
+  /*
+   * The invariant this whole section exists for. Played as a fuzz: whatever
+   * state the night ends up in, no player is ever looking at a phone with no
+   * action on it.
+   */
+  const ids = ['p0', 'p1', 'p2'];
+  for (let seed = 0; seed < 25; seed++) {
+    const engine = new GameEngine(wrestling, { seed });
+    ids.forEach((id, i) => {
+      engine.addPlayer({ id, name: `P${i}`, isHost: i === 0 });
+      engine.setReady(id, true);
+    });
+    engine.start();
+
+    for (let step = 0; step < 40 && !engine.state.vars.ended; step++) {
+      for (const id of ids) {
+        assert.ok(
+          engine.legalActions(id).length > 0,
+          `seed ${seed} step ${step}: ${id} has nothing to press`,
+        );
+      }
+      // Nobody does anything except the one player who keeps tapping the way
+      // out. The night should still progress.
+      ok(engine.dispatch(ids[step % ids.length], { type: 'unstick' }));
+    }
+    assert.ok(engine.state.round > 1, `seed ${seed}: the night went nowhere`);
+  }
 });
 
 /* --------------------------- end of the turn -------------------------- */
@@ -987,8 +1207,12 @@ test('Taboo Tuesday opens a vote and the loser drinks', () => {
   assert.ok(engine.state.vars.vote, 'a vote is running');
   assert.equal(engine.state.vars.orders.length, 0, 'nobody drinks yet');
 
-  // While a vote is open, voting is the only thing on offer.
+  // While a vote is open, voting is the only thing on offer. The way out
+  // appears for everyone once the table has waited on whoever isn't voting.
   assert.deepEqual(engine.legalActions('p1').map((a) => a.type), ['vote']);
+  assert.deepEqual(
+    goStale(engine).legalActions('p1').map((a) => a.type), ['vote', 'unstick'],
+  );
 
   ok(engine.dispatch('p0', { type: 'vote', targets: ['p1'] }));
   ok(engine.dispatch('p1', { type: 'vote', targets: ['p1'] }));
@@ -1170,6 +1394,161 @@ test('ending the night ranks everyone, worst first', () => {
   const names = engine.state.result.scores.map((s) => s.name);
   assert.deepEqual(names, ['Bob', 'Cat', 'Ann']);
   assert.equal(engine.state.result.winnerId, 'p0', 'least punished survives');
+});
+
+/* --------------------------- the shared screen ------------------------ */
+
+/**
+ * One screen on the table and nobody holding a phone. Those seats are real
+ * players — turn order, tally, drinks — they just have nowhere private to
+ * hold cards, so they play the Mini Games and nothing else.
+ */
+function localTable(names = ['Conor', 'Jude', 'Rouse'], settings) {
+  const engine = new GameEngine(wrestling, { seed: 99 });
+  engine.addPlayer({ id: 'screen', name: 'The screen', isHost: true, local: true });
+  names.forEach((name, i) => engine.addPlayer({ id: `s${i}`, name, local: true }));
+  if (settings) engine.setSettings(settings);
+  engine.start();
+  return engine;
+}
+
+test('a local seat is ready on arrival and needs nobody to tap anything', () => {
+  const engine = new GameEngine(wrestling, { seed: 1 });
+  const seat = engine.addPlayer({ id: 'local:1', name: 'Jude', local: true });
+  assert.equal(seat.local, true);
+  assert.equal(seat.ready, true, 'there is no phone to tap "I am ready" on');
+  assert.equal(seat.connected, true);
+});
+
+test('local seats are dealt no hand — the Mini Games are the game', () => {
+  const engine = localTable();
+  for (const player of engine.state.players) {
+    assert.deepEqual(player.hand, [], `${player.name} should hold nothing`);
+  }
+  assert.equal(engine.state.deck.length, 430, 'the whole draw pile is still there');
+  // And the hand pack is untouched, waiting for anybody who picks up a phone.
+  assert.equal(engine.state.vars.eventPool.length, 156);
+});
+
+test('a whole night can be played from one screen', () => {
+  const engine = localTable();
+  let drawn = 0;
+
+  for (let i = 0; i < 12; i += 1) {
+    const who = engine.state.turn;
+    ok(engine.dispatch(who, { type: 'draw' }));
+    drawn += 1;
+
+    const outcome = engine.legalActions(who).find((a) => a.type === 'outcome');
+    if (outcome) {
+      ok(engine.dispatch(who, {
+        type: 'outcome',
+        index: outcome.index,
+        targets: outcome.needs === 0 ? undefined : [pickOther(engine, who)],
+      }));
+    }
+    if (engine.state.vars.vote) {
+      for (const p of engine.state.players) {
+        engine.dispatch(p.id, { type: 'vote', targets: [pickOther(engine, p.id)] });
+      }
+    }
+    for (const order of [...engine.state.vars.orders]) {
+      ok(engine.dispatch(order.playerId, { type: 'startOrder', orderId: order.id }));
+      ok(engine.dispatch(order.playerId, { type: 'finishOrder', orderId: order.id }));
+    }
+    if (engine.state.turn === who) ok(engine.dispatch(who, { type: 'endTurn' }));
+
+    // Nothing that needs a hidden hand can ever come up.
+    assert.equal(engine.state.vars.pending, null, 'no face-down cards without hands');
+  }
+
+  assert.equal(drawn, 12);
+  assert.equal(engine.state.deck.length, 430 - 12);
+  assert.ok(engine.state.players.some((p) => p.seconds || p.downs), 'somebody drank');
+});
+
+test('a local seat offers no cards to play and nothing to swap', () => {
+  const engine = localTable();
+  const types = new Set(engine.legalActions(engine.state.turn).map((a) => a.type));
+  assert.ok(!types.has('playEvent'));
+  assert.ok(!types.has('swapCard'));
+  assert.ok(types.has('draw'), 'but it can still draw');
+});
+
+test('a phone claims a seat and is dealt in where it stands', () => {
+  const engine = localTable();
+  const before = engine.getPlayer('s1');
+  before.seconds = 14; // Jude has already been made to drink
+
+  const seat = engine.claimSeat('s1', 'phone-token', 'Jude');
+
+  assert.equal(seat.id, 'phone-token');
+  assert.equal(seat.local, false);
+  assert.equal(seat.name, 'Jude', 'same person, same name');
+  assert.equal(seat.seconds, 14, 'and everything they already drank');
+  assert.equal(seat.hand.length, 4, 'dealt in on the spot');
+  assert.equal(engine.getPlayer('s1'), null, 'the old id is gone');
+  assert.equal(engine.state.players.length, 4, 'it is the same seat, not a new one');
+});
+
+test('the seats still without a phone carry on with the Mini Games', () => {
+  const engine = localTable();
+  engine.claimSeat('s1', 'phone-token', 'Jude');
+
+  assert.equal(engine.getPlayer('phone-token').hand.length, 4);
+  for (const id of ['screen', 's0', 's2']) {
+    assert.deepEqual(engine.getPlayer(id).hand, [], 'no phone, no hand');
+  }
+});
+
+test('claiming a seat takes its turn, its drinks and its curse with it', () => {
+  const engine = localTable();
+  const v = engine.state.vars;
+
+  engine.state.turn = 's1';
+  v.cursed.s1 = 2;
+  v.doubleUntil.s1 = Date.now() + 60000;
+  v.orders.push({ id: 1, batch: 1, playerId: 's1', from: 's0', seconds: 5 });
+  v.orders.push({ id: 2, batch: 1, playerId: 's0', from: 's1', seconds: 5 });
+
+  engine.claimSeat('s1', 'phone', 'Jude');
+
+  assert.equal(engine.state.turn, 'phone', 'it is still their go');
+  assert.equal(v.cursed.phone, 2);
+  assert.equal(v.cursed.s1, undefined);
+  assert.ok(v.doubleUntil.phone);
+  assert.equal(v.orders[0].playerId, 'phone', 'the drink they owe follows them');
+  assert.equal(v.orders[1].from, 'phone', 'and the one they dealt out');
+});
+
+test('a seat somebody is already playing cannot be claimed', () => {
+  const engine = localTable();
+  engine.claimSeat('s1', 'phone', 'Jude');
+
+  assert.throws(() => engine.claimSeat('phone', 'other-phone', 'Not Jude'), /already playing/i);
+  assert.throws(() => engine.claimSeat('nope', 'other-phone', 'Ghost'), /gone/i);
+  assert.throws(() => engine.claimSeat('s2', 'phone', 'Jude again'), /already have a seat/i);
+});
+
+test('a stray disconnect never empties a chair at the shared screen', () => {
+  const engine = localTable();
+  engine.dropPlayer('s1');
+
+  const seat = engine.getPlayer('s1');
+  assert.ok(seat, 'the seat is still there');
+  assert.equal(seat.connected, true, 'the screen is still playing it');
+  assert.equal(engine.state.players.length, 4);
+});
+
+test('a claimed seat can play a card like anybody else', () => {
+  const engine = localTable();
+  engine.claimSeat('s1', 'phone', 'Jude');
+  const card = engine.getPlayer('phone').hand[0];
+
+  ok(engine.dispatch('phone', { type: 'playEvent', cardId: card.id, index: 0, targets: ['s0'] }));
+  // The target has no phone, so there is nobody to counter — the screen turns
+  // it over, which is what the unstick path is for.
+  assert.ok(engine.state.vars.pending || engine.state.vars.lastPlay, 'the card was played');
 });
 
 /* ------------------------------ helpers ------------------------------- */

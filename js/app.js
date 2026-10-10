@@ -12,7 +12,7 @@ import {
   showScreen, renderLobby, renderGame, tickCountdowns, syncClock,
   drinkBatches, batchRemaining, watchDock,
   openSheet, closeSheet, sheetIsOpen, pickerSheet, tallySheet,
-  counterSheet, fillCardList, renderSettings,
+  counterSheet, fillCardList, renderSettings, renderLocalLobby,
   openFocus, closeFocus, focusIsOpen,
   toast, text, button,
 } from './ui.js';
@@ -24,6 +24,13 @@ const WRESTLER_KEY = 'cardgame.wrestler';
 let room = null;
 let view = null;
 let resultShown = false;
+
+/*
+ * True when this device is the table rather than a player at it. It changes
+ * who an action is sent as: on a phone every action is yours, on the screen
+ * every action belongs to whichever seat is currently up.
+ */
+let isScreen = false;
 
 /* ---------------------------- bootstrapping --------------------------- */
 
@@ -37,6 +44,14 @@ function init() {
     event.preventDefault();
     joinTable($('input-code').value);
   });
+  $('btn-local').addEventListener('click', openLocalLobby);
+  $('form-seat').addEventListener('submit', (event) => {
+    event.preventDefault();
+    addSeat();
+  });
+  $('btn-local-start').addEventListener('click', startLocal);
+  $('btn-local-back').addEventListener('click', () => leaveRoom());
+
   $('btn-copy').addEventListener('click', copyInvite);
   $('btn-ready').addEventListener('click', toggleReady);
   $('btn-start').addEventListener('click', () => room?.start());
@@ -142,6 +157,69 @@ async function hostTable() {
   }
 }
 
+/* --------------------------- one screen ------------------------------- */
+
+/**
+ * Open a table that is played round this device.
+ *
+ * The screen is the host but not a player: it deals, displays and acts for
+ * each seat in turn. It still gets a room code if the broker answers, because
+ * anyone who fancies a hand can join mid-night and be dealt in — but the
+ * Start button never waits on that, so a dead broker costs you the phones and
+ * nothing else.
+ */
+async function openLocalLobby() {
+  const button = $('btn-local');
+  button.disabled = true;
+  button.textContent = 'Setting up…';
+  try {
+    await ensureDeck();
+
+    isScreen = true;
+    room = new HostRoom({
+      rulesetId: DEFAULT_RULESET,
+      onUpdate: onView,
+      onError: (msg) => toast(msg, { error: true }),
+    });
+    await room.open('The screen', { screen: true });
+
+    showScreen('local');
+    drawLocalLobby();
+    $('input-seat').focus();
+  } catch (err) {
+    isScreen = false;
+    room = null;
+    toast(err.message, { error: true });
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Play on this screen';
+  }
+}
+
+function addSeat() {
+  const input = $('input-seat');
+  const name = input.value.trim();
+  if (!name) return;
+  room?.addLocalSeat(name);
+  input.value = '';
+  input.focus();
+}
+
+function drawLocalLobby() {
+  if (!room?.localSeats) return;
+  renderLocalLobby(room.localSeats, {
+    code: room.code,
+    onRemove: (id) => room.removeLocalSeat(id),
+  });
+  $('btn-local-start').disabled = room.localSeats.length < 2;
+}
+
+function startLocal() {
+  if (!room) return;
+  if (room.localSeats.length < 2) return toast('Add at least two players', { error: true });
+  room.start();
+}
+
 async function joinTable(rawCode) {
   const code = normaliseCode(rawCode);
   if (code.length < 4) return toast('That room code looks too short', { error: true });
@@ -181,6 +259,7 @@ function leaveRoom(reason) {
   room?.close();
   room = null;
   view = null;
+  isScreen = false;
   resultShown = false;
   finished.clear();
   closeSheet();
@@ -195,6 +274,26 @@ function leaveRoom(reason) {
 function onView(next) {
   view = next;
   syncClock(next.now);
+
+  /*
+   * A seam for the browser tests, which drive a whole night through the real
+   * page rather than a harness. It gives away nothing: this is the player's
+   * own browser, and on a client `room` holds only the view they were
+   * already sent. The host's engine is on the host's machine, which is where
+   * the trust boundary has always been.
+   */
+  window.__room = room;
+
+  if (next.phase === 'lobby' && isScreen) {
+    showScreen('local');
+    drawLocalLobby();
+    renderSettings(next, SETTINGS_SCHEMA, {
+      isHost: true,
+      into: 'local-settings',
+      onChange: (patch) => room?.setSettings(patch),
+    });
+    return;
+  }
 
   if (next.phase === 'lobby') {
     showScreen('lobby');
@@ -216,6 +315,7 @@ function onView(next) {
   showScreen('game');
   renderGame(next, {
     onAct: act,
+    onSeatAct: seatAct,
     onOutcome: resolveOutcome,
     onShowCard: showCard,
     onShowPlayer: showPlayer,
@@ -232,6 +332,37 @@ function onView(next) {
 
 function act(action) {
   room?.act(action);
+}
+
+/**
+ * Send an action as one of the seats round the shared screen.
+ *
+ * An outcome that needs a target still has to ask who, so it goes through
+ * the same picker a phone would use — just resolved as that seat rather than
+ * as this device.
+ */
+function seatAct(seatId, action) {
+  if (!room) return;
+  const needs = action.needs ?? 0;
+  if (action.type !== 'outcome' || needs === 0) {
+    room.actAs(seatId, action);
+    return;
+  }
+
+  const seat = view.players.find((p) => p.id === seatId);
+  openSheet(
+    pickerSheet(
+      {
+        title: 'Who does it hit?',
+        hint: `${seat?.name ?? 'They'}: ${action.label}`,
+        players: view.players.filter((p) => p.connected && !p.screen),
+        needs,
+        preselected: action.suggested ?? [],
+        confirmLabel: 'Send it',
+      },
+      (targets) => room.actAs(seatId, { ...action, targets }),
+    ),
+  );
 }
 
 /**
@@ -446,6 +577,20 @@ function openMenu() {
     const box = document.createElement('div');
     box.className = 'sheet-actions';
 
+    /*
+     * Always first, always there. Everything else in this menu is a thing
+     * you might want; this is the thing you need when the table has stalled
+     * and nobody can work out whose phone everyone is waiting on.
+     */
+    const out = view.legalActions.find((a) => a.type === 'unstick');
+    if (out) {
+      box.append(button(out.label, () => {
+        close();
+        act({ type: 'unstick' });
+      }, 'btn btn-gold'));
+      box.append(text('p', unstickNote(view), 'sheet-note'));
+    }
+
     for (const action of view.legalActions) {
       if (action.type === 'revealCard') {
         box.append(button('Turn the card over', () => {
@@ -473,6 +618,16 @@ function openMenu() {
     }));
     root.append(box);
   });
+}
+
+/** Say what the unstick button is about to do, so it is never a mystery tap. */
+function unstickNote(v) {
+  if (v.vote) return 'Settles the vote on whoever has voted so far.';
+  if (v.pending) return 'Turns the face-down card over. It still lands as it was played.';
+  const who = v.players.find((p) => p.id === v.turn);
+  return who && who.id !== v.you?.id
+    ? `Moves play past ${who.name}. Nobody loses a drink they already owe.`
+    : 'Ends your turn and moves play on.';
 }
 
 function finalSheet(final) {

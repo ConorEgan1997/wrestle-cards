@@ -305,6 +305,59 @@ input::placeholder {
   color: var(--gold);
 }
 
+/* ------------------------- the one-screen lobby -------------------- */
+
+/*
+ * Names in seating order, numbered, because that order *is* the game: a
+ * good chunk of the deck says "the person to your left". No ready state and
+ * no wrestler field — there are no phones here to tap them on.
+ */
+.seat-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+
+.seat-n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.seat-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-tiny {
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  flex: none;
+}
+
 .player-list {
   list-style: none;
   margin: 0 0 14px;
@@ -1341,6 +1394,15 @@ input::placeholder {
   margin: 0 0 12px;
 }
 
+.sheet-note {
+  /* Sits under a button and says what it will do. Deliberately small: the
+     button's label is the answer, this is the reassurance. */
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: -2px 0 6px;
+}
+
 .sheet-card {
   display: flex;
   justify-content: center;
@@ -1534,5 +1596,182 @@ input::placeholder {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* ==================================================================== *
+ * The shared screen
+ *
+ * The same game, read from the other side of a room instead of from your
+ * hand. Everything gets bigger, the hand strip goes (there are no cards on
+ * this device), and the layout turns sideways: a TV or a laptop on the
+ * coffee table is landscape, where a phone never is. These rules are scoped
+ * to .is-screen so the phone layout above is untouched.
+ * ==================================================================== */
+
+.is-screen .hud-turn span:first-child {
+  font-size: 1.6rem;
+}
+
+.is-screen #hand-section {
+  display: none;
+}
+
+/* Whose go it is, above their buttons, because across a room the player
+   strip is too small to carry that on its own. */
+.seat-turn {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  align-self: center;
+}
+
+.btn-big {
+  font-size: 1.05rem;
+  padding: 14px 20px;
+}
+
+.is-screen .card-title {
+  font-size: 2rem;
+}
+
+.is-screen .card-text {
+  font-size: 1.05rem;
+  -webkit-line-clamp: none;
+  display: block;
+  max-width: 46ch;
+}
+
+.is-screen .player-chip {
+  font-size: 0.95rem;
+}
+
+/* The clock is the thing a room of people is actually watching, so on a
+   screen it is allowed to be as big as the screen is. */
+.is-screen .timer-takeover .countdown {
+  font-size: min(42vh, 30vw);
+}
+
+.is-screen .timer-who {
+  font-size: min(9vh, 7vw);
+}
+
+/*
+ * Landscape. A TV or a laptop on the coffee table is wide and short, which
+ * is the opposite of every assumption in the phone layout: there the screen
+ * is tall and the scarce axis is width. Here height is scarce, so the card
+ * is sized off what's left after the dock, and the buttons spread sideways
+ * into the room they have instead of stacking.
+ */
+@media (min-width: 900px) and (min-aspect-ratio: 5 / 4) {
+  .is-screen #table-area {
+    min-height: 0;
+  }
+
+  /*
+   * Nobody scrolls a television. The whole game has to sit inside one
+   * screenful, so the page becomes a fixed-height column: header, the table
+   * taking whatever is left, the player strip, and the dock. The card is
+   * then sized to the space the table actually got rather than guessing.
+   */
+  .is-screen .screen-game {
+    max-width: none;
+    height: 100svh;
+    padding-bottom: 0;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .is-screen #table-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  /*
+   * Sideways: the card at full height on the left, what it says in large
+   * type beside it. A phone has no width to spare so it stacks these; a
+   * television has nothing but width, and a 200px-tall card marooned in the
+   * middle of a 1280px screen is the one thing nobody across the room can
+   * read.
+   */
+  .is-screen .table-area {
+    flex: 1;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    padding: 18px 28px;
+  }
+
+  .is-screen .table-area .card-title,
+  .is-screen .table-area .card-text {
+    text-align: left;
+  }
+
+  .is-screen .table-area .card-title {
+    font-size: clamp(2rem, 4.2vw, 3.4rem);
+    line-height: 1.02;
+  }
+
+  .is-screen .table-area .card-text {
+    font-size: clamp(1rem, 1.7vw, 1.5rem);
+    max-width: 22ch;
+  }
+
+  /* Title and text are one block beside the card, not two loose siblings. */
+  .is-screen .table-area > :not(.card) {
+    max-width: 46%;
+  }
+
+  /*
+   * The card is sized by height, not width: it takes whatever the table row
+   * is tall and its width follows from its own art ratio. Sizing it the
+   * other way round — letting flex stretch it along the row — gives a squat
+   * card a height of several screens.
+   */
+  .is-screen .card-big {
+    --card-w: auto;
+    flex: 0 0 auto;
+    align-self: stretch;
+    width: auto;
+    height: auto;
+    max-width: 50%;
+    aspect-ratio: var(--card-ratio);
+  }
+
+  .is-screen .strip-section {
+    flex: none;
+  }
+
+  .is-screen .dock {
+    position: static;
+  }
+
+  .is-screen .dock-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .is-screen .dock-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .is-screen .dock-actions .btn {
+    flex: 0 1 auto;
+    min-width: 220px;
+  }
+
+  /* The log is for settling arguments afterwards, not for the room to read
+     mid-game — it would push the card off a 720p screen. */
+  .is-screen .log-box {
+    display: none;
   }
 }

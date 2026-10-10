@@ -33,6 +33,13 @@ const DOUBLE_MS = 5 * 60 * 1000; // Botchamania: five minutes of doubled drinks
 const CURSE_COUNT = 3; // You Are Cursed: the next three punishments
 const BOTCH_MULTIPLIER = 2; // call a card wrong and your drink doubles
 const SWAP_SIP_SECONDS = 3; // the cost of binning a card you don't fancy
+/*
+ * How long the table waits on one person before anybody may move the game on
+ * for them. Long enough that it is never a way to rob somebody of a turn or
+ * of the chance to counter; short enough that a phone left face down doesn't
+ * end the night. Whoever is being waited on, and the host, never wait at all.
+ */
+const STUCK_MS = 45 * 1000;
 
 /** Filled in by loadDeck() before a game starts. */
 let CARDS = [];
@@ -142,8 +149,9 @@ export const SETTINGS_SCHEMA = {
   },
   handSize: {
     label: 'Cards in hand',
-    note: 'Fewer makes each card matter; more makes countering easier.',
+    note: 'Fewer makes each card matter; more makes countering easier. None turns the night into Mini Games only — nothing is hidden, so it works on one phone passed round the table.',
     choices: [
+      { value: 0, label: 'None', detail: 'Mini Games only' },
       { value: 3, label: '3', detail: 'Tight' },
       { value: 4, label: '4', detail: 'Standard' },
       { value: 5, label: '5', detail: 'Loose' },
@@ -192,7 +200,19 @@ export const wrestling = {
 
     const handSize = settingOf(state, 'handSize');
     for (const player of state.players) {
-      player.hand = events.splice(0, handSize);
+      // A screen runs the table, it doesn't sit at it.
+      if (player.screen) {
+        player.hand = [];
+        continue;
+      }
+      /*
+       * A local seat gets no hand. Everyone at a shared screen can see it, so
+       * there is nowhere to hold a card secretly, and a hand you cannot hide
+       * makes a nonsense of countering. Those seats play the Mini Games — 430
+       * of them — which is a whole game on its own. A phone that claims the
+       * seat later is dealt in then (see dealIn).
+       */
+      player.hand = player.local ? [] : events.splice(0, handSize);
       player.seconds = 0; // total time spent drinking
       player.downs = 0; // whole drinks downed
       player.shots = 0; // hardcore match forfeits
@@ -201,6 +221,7 @@ export const wrestling = {
 
     state.vars = {
       stage: 'draw',
+      turnAt: Date.now(), // when the current turn began — see STUCK_MS
       current: null, // { card, drawnBy, resolved }
       orders: [], // outstanding and completed drink orders
       eventPool: events, // what's left, for replacing one-shots
@@ -209,6 +230,7 @@ export const wrestling = {
       cursed: {}, // playerId -> punishments remaining
       titleMatch: false,
       vote: null, // { orderTemplate, by, votes: {voterId: targetId} }
+      pending: null, // the card face down on the table, if there is one
       houseRules: [], // created by WWE Champion
       swappedThisTurn: false, // one card swap per turn, and it costs a sip
       nextOrderId: 1,
@@ -225,21 +247,40 @@ export const wrestling = {
   legalActions(state, player, ctx) {
     const v = state.vars;
     const actions = [];
-    const isTurn = state.turn === player.id;
+    // A screen never takes a turn of its own; it acts for the seats around
+    // it, and each of those gets its own list.
+    const isTurn = !player.screen && state.turn === player.id;
+
+    /*
+     * The way out. A blocked table is the one failure the app can't talk its
+     * way out of — somebody has to be able to press something — so this is
+     * offered in every state, to whoever is allowed to use it yet: the person
+     * being waited on and the host straight away, everyone else once the
+     * table has been waiting. See the 'unstick' case in applyAction.
+     */
+    const unstick = mayUnstick(state, player)
+      ? { type: 'unstick', label: unstickLabel(state, player) }
+      : null;
 
     if (v.vote) {
       if (!(player.id in v.vote.votes)) actions.push({ type: 'vote', label: 'Cast your vote' });
+      if (unstick) actions.push(unstick);
       return actions;
     }
 
     // A face-down card stops everything else until it is answered.
     if (v.pending) {
-      if (v.pending.canCounter.includes(player.id) && !v.pending.responses[player.id]) {
+      const youOwe = v.pending.canCounter.includes(player.id) && !v.pending.responses[player.id];
+      if (youOwe) {
         actions.push({ type: 'guessCard', label: 'Name the card' });
         actions.push({ type: 'acceptCard', label: 'Take it' });
       }
       if (v.pending.by === player.id || player.isHost) {
         actions.push({ type: 'revealCard', label: 'Turn it over' });
+      } else if (unstick) {
+        // Everyone the table is waiting *on* has their own buttons; everyone
+        // waiting gets the way out, in case the answer is never coming.
+        actions.push(unstick);
       }
       return actions;
     }
@@ -260,6 +301,11 @@ export const wrestling = {
       });
       actions.push({ type: 'endTurn', label: 'Next player' });
     }
+
+    // "Next player" is above, for whoever is on the clock. For everyone else
+    // the same move arrives as "Skip Jude" — immediately for the host, once
+    // Jude has dropped off, or once the table has waited long enough.
+    if (!isTurn && unstick) actions.push(unstick);
 
     // Event Cards are reactive: they can be played on anyone's turn. Whoever
     // plays one always gets to say who it lands on, so every one of these
@@ -302,9 +348,7 @@ export const wrestling = {
       batches.get(order.batch).push(order);
     }
     for (const [batch, orders] of batches) {
-      const mayRun = player.isHost
-        || orders.some((o) => o.from === player.id || o.playerId === player.id);
-      if (!mayRun) continue;
+      if (!mayControl(state, orders, player)) continue;
       actions.push({
         type: orders.some((o) => o.startedAt) ? 'finishBatch' : 'startBatch',
         batch,
@@ -330,9 +374,11 @@ export const wrestling = {
      * legalActions only tells the UI what to draw. This is the part that
      * actually holds: while a card is face down or the table is voting,
      * nothing else happens. Running the clock stays allowed throughout, so a
-     * countdown already in flight can never get stranded behind a card.
+     * countdown already in flight can never get stranded behind a card — and
+     * so does unsticking, which exists precisely for the states this gate
+     * creates.
      */
-    const CLOCK = ['startBatch', 'finishBatch'];
+    const CLOCK = ['startBatch', 'finishBatch', 'unstick'];
     if (v.pending && ![...CLOCK, 'guessCard', 'acceptCard', 'revealCard'].includes(action.type)) {
       ctx.illegal('There is a card face down — that has to be answered first');
     }
@@ -497,7 +543,7 @@ export const wrestling = {
       // the table runs them as a single countdown rather than five.
       case 'startBatch': {
         const orders = findBatch(state, action.batch, ctx);
-        requireController(orders, player, ctx);
+        requireController(state, orders, player, ctx);
         const at = Date.now();
         for (const order of orders) order.startedAt ??= at;
         return;
@@ -505,14 +551,14 @@ export const wrestling = {
 
       case 'finishBatch': {
         const orders = findBatch(state, action.batch, ctx);
-        requireController(orders, player, ctx);
+        requireController(state, orders, player, ctx);
         for (const order of [...orders]) settleOrder(state, order, ctx);
         return;
       }
 
       case 'startOrder': {
         const order = findOrder(state, action.orderId, ctx);
-        requireController([order], player, ctx);
+        requireController(state, [order], player, ctx);
         if (order.startedAt) ctx.illegal('Already started');
         order.startedAt = Date.now();
         return;
@@ -520,7 +566,7 @@ export const wrestling = {
 
       case 'finishOrder': {
         const order = findOrder(state, action.orderId, ctx);
-        requireController([order], player, ctx);
+        requireController(state, [order], player, ctx);
         settleOrder(state, order, ctx);
         return;
       }
@@ -534,12 +580,66 @@ export const wrestling = {
       }
 
       case 'endTurn': {
-        requireTurn(state, player, ctx);
+        if (!mayEndTurn(state, player)) ctx.illegal('It is not your turn');
         if (v.current && !v.current.resolved) {
           ctx.log(`${v.current.card.title} passed with no penalty`);
         }
+        if (state.turn !== player.id) {
+          const holder = ctx.getPlayer(state.turn);
+          ctx.log(`${player.name} moved the game on past ${holder?.name ?? 'an empty seat'}`);
+        }
         endTurn(state, ctx);
         return;
+      }
+
+      /*
+       * The unstick button.
+       *
+       * A room full of people with drinks in their hands will put a phone
+       * down mid-turn, and until now that could leave the whole table with
+       * nothing to press: the player on the clock is the only one who can
+       * draw or end their turn, a face-down card freezes everyone, and a vote
+       * freezes everyone twice over. One tap here clears whatever is actually
+       * in the way.
+       *
+       * Three rules make it safe enough to give everybody rather than just
+       * the host (who is as likely as anyone to be the one in the toilet):
+       *
+       *   - it never cancels a drink. A face-down card lands as played, a
+       *     vote is settled on the votes already cast. You cannot tap your
+       *     way out of what you owe.
+       *   - it does one thing — the most blocking thing — and says so in the
+       *     log, with the name of whoever tapped it. Tap it again for the
+       *     next blocker. A single tap cannot run the whole night.
+       *   - the table can see it happen, which is the real check on it.
+       */
+      case 'unstick': {
+        if (!mayUnstick(state, player)) {
+          ctx.illegal('Give them a moment — anyone can move this on shortly');
+        }
+        switch (blockedBy(state)) {
+          case 'vote': {
+            const cast = Object.keys(v.vote.votes).length;
+            ctx.log(cast
+              ? `${player.name} called the vote — counting the ${cast} in`
+              : `${player.name} dropped the vote — nobody voted`);
+            if (cast) closeVote(state, ctx);
+            else v.vote = null;
+            return;
+          }
+          case 'pending': {
+            ctx.log(`${player.name} turned the card over`);
+            resolvePending(state, ctx);
+            return;
+          }
+          default: {
+            const holder = ctx.getPlayer(state.turn);
+            const waiting = holder && holder.id !== player.id ? ` past ${holder.name}` : '';
+            ctx.log(`${player.name} moved the game on${waiting}`);
+            endTurn(state, ctx);
+            return;
+          }
+        }
       }
 
       case 'toggleTitleMatch': {
@@ -560,9 +660,12 @@ export const wrestling = {
     }
   },
 
+  dealIn: dealInSeat,
+  reseat,
+
   isGameOver(state) {
     if (!state.vars.ended) return null;
-    const ranked = [...state.players].sort(
+    const ranked = state.players.filter((p) => !p.screen).sort(
       (a, b) => b.seconds + b.downs * 20 - (a.seconds + a.downs * 20),
     );
     return {
@@ -616,6 +719,11 @@ export const wrestling = {
         isHost: p.isHost,
         connected: p.connected,
         ready: p.ready,
+        // Whether there is a phone behind this seat, and whether the seat is
+        // a screen rather than a player. Both are public: everyone at the
+        // table can see who is holding a phone and which box is the telly.
+        local: !!p.local,
+        screen: !!p.screen,
         wrestler: p.wrestler || '',
         handCount: (p.hand ?? []).length,
         seconds: p.seconds ?? 0,
@@ -641,6 +749,21 @@ export const wrestling = {
       // The host checks again when the action comes back, so this list is a
       // convenience for rendering and not a security boundary.
       legalActions: you && state.phase === 'playing' ? clone(wrestling.legalActions(state, you, ctx)) : [],
+      /*
+       * A screen is shown what each seat around it can do, because it is the
+       * thing those seats act through — they have no phone of their own.
+       * Only seats still marked `local` are included: the moment somebody
+       * picks up a phone, their options are theirs and the screen stops
+       * being told about them, which is what keeps a hand hidden.
+       */
+      screen: !!you?.screen,
+      seatActions: you?.screen && state.phase === 'playing'
+        ? Object.fromEntries(
+          state.players
+            .filter((p) => p.local && !p.screen)
+            .map((p) => [p.id, clone(wrestling.legalActions(state, p, ctx))]),
+        )
+        : null,
       log: state.log.slice(-40),
       result: clone(state.result),
     };
@@ -696,6 +819,107 @@ function requireTurn(state, player, ctx) {
   if (state.turn !== player.id) ctx.illegal('It is not your turn');
 }
 
+/**
+ * Since when has the table been stuck on this?
+ *
+ * Each kind of block carries its own timestamp, so the wait is measured from
+ * the thing actually in the way rather than from the start of the turn.
+ */
+function blockedSince(state) {
+  const v = state.vars;
+  switch (blockedBy(state)) {
+    case 'vote': return v.vote.at ?? 0;
+    case 'pending': return v.pending.at ?? 0;
+    default: return v.turnAt ?? 0;
+  }
+}
+
+/**
+ * May this player move the game on?
+ *
+ * Whoever the table is waiting on can always act — it is their turn, their
+ * card, their vote — and the host can always step in. Everybody else has to
+ * wait out STUCK_MS first, because an ungated version of this button is a
+ * way to skip somebody's turn or deny them the chance to counter, which is
+ * precisely what the rest of the rules are careful not to allow.
+ */
+function mayUnstick(state, player, now = Date.now()) {
+  if (player.isHost) return true;
+  switch (blockedBy(state)) {
+    case 'vote':
+      // The vote is on everyone, so nobody owns it — only the clock decides.
+      break;
+    case 'pending':
+      if (state.vars.pending.by === player.id) return true;
+      break;
+    default:
+      if (state.turn === player.id) return true;
+      // A seat nobody is sitting in is not worth waiting on.
+      if (!state.players.find((p) => p.id === state.turn)?.connected) return true;
+  }
+  return now - blockedSince(state) >= STUCK_MS;
+}
+
+/** What the unstick button is actually going to do, said plainly. */
+function unstickLabel(state, player) {
+  switch (blockedBy(state)) {
+    case 'vote': return 'Call the vote';
+    case 'pending': return 'Turn the card over';
+    default: {
+      const holder = state.players.find((p) => p.id === state.turn);
+      if (!holder || holder.id === player.id) return 'Next player';
+      return `Skip ${holder.name}`;
+    }
+  }
+}
+
+/**
+ * What is stopping the game, if anything.
+ *
+ * In order of how hard it blocks: a vote freezes every player, a face-down
+ * card freezes everyone except its targets, and otherwise it is simply
+ * somebody's turn and they have not moved. This is what the unstick action
+ * reads, and what the UI uses to say who the table is waiting on.
+ */
+function blockedBy(state) {
+  const v = state.vars;
+  if (v.vote) return 'vote';
+  if (v.pending) return 'pending';
+  return 'turn';
+}
+
+/**
+ * May this player work the clock on these drinks?
+ *
+ * The player who dealt the drink out, anyone drinking it, and the host. Plus
+ * anyone at all when none of those is connected — otherwise a batch whose
+ * dealer and drinker have both dropped off sits there with no button on any
+ * phone that can clear it.
+ */
+function mayControl(state, orders, player) {
+  if (player.isHost) return true;
+  if (orders.some((o) => o.from === player.id || o.playerId === player.id)) return true;
+  const owners = new Set(orders.flatMap((o) => [o.from, o.playerId]));
+  const live = state.players.filter(
+    (p) => p.connected && (p.isHost || owners.has(p.id)),
+  );
+  return live.length === 0;
+}
+
+/**
+ * May this player end the current turn?
+ *
+ * Normally only whoever is on the clock — ending someone else's turn for them
+ * would be a way to rob them of a play. But the host can always move the
+ * night on, and so can anybody once the player whose turn it is has dropped
+ * off, because otherwise one closed laptop ends the game for everyone.
+ */
+function mayEndTurn(state, player) {
+  if (state.turn === player.id || player.isHost) return true;
+  const holder = state.players.find((p) => p.id === state.turn);
+  return !holder || !holder.connected;
+}
+
 function requireHost(player, ctx) {
   if (!player.isHost) ctx.illegal('Only the host can do that');
 }
@@ -720,10 +944,8 @@ function findBatch(state, batch, ctx) {
  * too, and the host can always close one out, so a dead phone never leaves the
  * table stuck waiting on a countdown nobody can press.
  */
-function requireController(orders, player, ctx) {
-  const allowed = player.isHost
-    || orders.some((o) => o.from === player.id || o.playerId === player.id);
-  if (!allowed) ctx.illegal('That drink is not yours to run');
+function requireController(state, orders, player, ctx) {
+  if (!mayControl(state, orders, player)) ctx.illegal('That drink is not yours to run');
 }
 
 function settleOrder(state, order, ctx) {
@@ -757,6 +979,11 @@ function endTurn(state, ctx) {
   v.stage = 'draw';
   v.swappedThisTurn = false;
   state.round += 1;
+  // Settling a drink can end the turn on its own, so anything that wants to
+  // end the turn *unless it already happened* watches this counter rather
+  // than guessing from the stage.
+  v.turnSeq = (v.turnSeq || 0) + 1;
+  v.turnAt = Date.now();
   ctx.advanceTurn();
 }
 
@@ -854,7 +1081,7 @@ function applyOutcome(
   const picked = Array.isArray(chosenIds) ? chosenIds.filter(Boolean) : [];
 
   if (outcome.target === 'vote' && !(allowOverride && picked.length)) {
-    v.vote = { outcome: clone(outcome), by: actor.id, cardTitle, votes: {} };
+    v.vote = { outcome: clone(outcome), by: actor.id, cardTitle, votes: {}, at: Date.now() };
     ctx.log(`${cardTitle}: the table votes`);
     return [];
   }
@@ -959,6 +1186,80 @@ function addOrder(state, target, spec, ctx) {
         : `drinks ${order.seconds}s`;
   ctx.log(`${name} ${amount} — ${spec.label}`);
   return order;
+}
+
+/**
+ * Deal a seat in mid-night.
+ *
+ * Called when a phone claims a seat that has been played from the shared
+ * screen until now. From this point that player has a hand like anybody
+ * else; the seats still with no device carry on with the Mini Games. That is
+ * the deliberate shape of it — the night can start as a party game with the
+ * screen alone and grow into the full one as people pick their phones up.
+ */
+function dealInSeat(state, player, ctx) {
+  if (!state.vars?.eventPool || player.hand?.length) return 0;
+  const handSize = settingOf(state, 'handSize');
+  const hand = [];
+  for (let i = 0; i < handSize; i += 1) {
+    const card = drawEvent(state, ctx);
+    if (!card) break;
+    hand.push(card);
+  }
+  player.hand = hand;
+  if (hand.length) ctx.log(`${player.name} picked up a phone and was dealt in`);
+  return hand.length;
+}
+
+/**
+ * Follow a seat to a new id.
+ *
+ * Called when a phone takes over a seat the shared screen was playing. The
+ * player id is scattered through the night's bookkeeping — who owes a drink,
+ * who is cursed, who voted for whom, who played the face-down card — and a
+ * seat that changes id without this quietly sheds all of it, which in
+ * practice means walking away from drinks you owe.
+ */
+function reseat(state, oldId, newId) {
+  const v = state.vars;
+  if (!v) return;
+
+  const swap = (id) => (id === oldId ? newId : id);
+  const rekey = (map) => {
+    if (!map || !(oldId in map)) return;
+    map[newId] = map[oldId];
+    delete map[oldId];
+  };
+
+  rekey(v.doubleUntil);
+  rekey(v.cursed);
+
+  for (const order of v.orders ?? []) {
+    order.playerId = swap(order.playerId);
+    order.from = swap(order.from);
+  }
+
+  if (v.current) v.current.drawnBy = swap(v.current.drawnBy);
+
+  if (v.vote) {
+    v.vote.by = swap(v.vote.by);
+    rekey(v.vote.votes);
+    for (const voter of Object.keys(v.vote.votes)) {
+      v.vote.votes[voter] = swap(v.vote.votes[voter]);
+    }
+  }
+
+  const p = v.pending;
+  if (p) {
+    p.by = swap(p.by);
+    p.targets = p.targets.map(swap);
+    p.canCounter = p.canCounter.map(swap);
+    rekey(p.responses);
+  }
+
+  if (v.lastPlay) v.lastPlay.byId = swap(v.lastPlay.byId);
+  // House rules are recorded against a name, not an id, so they need nothing
+  // here — the name goes with the seat.
 }
 
 /** Read a game option, falling back to the default if it was never set. */
@@ -1124,7 +1425,18 @@ function closeVoteIfDone(state, ctx) {
   const v = state.vars;
   const voters = state.players.filter((p) => p.connected);
   if (Object.keys(v.vote.votes).length < voters.length) return;
+  closeVote(state, ctx);
+}
 
+/**
+ * Count the votes and hand out the drink.
+ *
+ * Called when everybody has voted, and by the unstick button when somebody
+ * plainly isn't going to — in which case it counts whoever did, because the
+ * alternative is a table frozen on one person's sleeping phone.
+ */
+function closeVote(state, ctx) {
+  const v = state.vars;
   const tally = {};
   for (const targetId of Object.values(v.vote.votes)) {
     tally[targetId] = (tally[targetId] || 0) + 1;

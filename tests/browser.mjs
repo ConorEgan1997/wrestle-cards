@@ -120,6 +120,33 @@ try {
     record('harness: and it closes', !(await harness.isVisible('#focus')));
   }
 
+  /* ------------- 1f. the table can always be unstuck ------------------- */
+  if (harnessRan) {
+    /*
+     * The harness renders Ann's screen. Put the turn on somebody else and
+     * leave them doing nothing — the state that used to leave Ann with an
+     * empty dock and no way to move the night on.
+     */
+    const stalled = await harness.evaluate(async () => {
+      const host = window.__host;
+      host.engine.state.turn = window.__guests[0].room.playerId; // Bob's turn
+      host.engine.state.vars.stage = 'draw';
+      host.engine.state.vars.current = null;
+      window.__render();
+      await new Promise((r) => setTimeout(r, 60));
+      const btn = document.querySelector('#dock-actions .btn');
+      return { label: btn?.textContent ?? null, turn: host.engine.state.turn };
+    });
+    record('harness: a stalled table still has a button', !!stalled.label, stalled.label);
+    record('harness: which says whose turn it is skipping', /Skip /.test(stalled.label || ''),
+      stalled.label);
+
+    await harness.click('#dock-actions .btn');
+    await harness.waitForTimeout(150);
+    const moved = await harness.evaluate(() => window.__host.engine.state.turn);
+    record('harness: and pressing it moves play on', moved !== stalled.turn, moved);
+  }
+
   /* ---------------- 1c. countering a card, through the UI ---------------- */
   if (harnessRan) {
   // Bob plays a card at Ann (the host, whose screen the harness renders).
@@ -441,6 +468,124 @@ try {
     return broken;
   });
   record('app: every module loads', modules.length === 0, modules.join(' | '));
+
+  /* ----------------- one screen, no phones ------------------------- */
+
+  /*
+   * The whole local path through the real page: open the lobby, seat four
+   * people, start, and play a turn — drawing and resolving as the seat whose
+   * go it is, which is what the shared screen does for every action.
+   */
+  await page.goto(BASE);
+  await page.click('#btn-local');
+  await page.waitForTimeout(900);
+  record('local: "Play on this screen" opens its own lobby', await page.isVisible('#screen-local'));
+
+  for (const name of ['Conor', 'Jude', 'Rouse', 'Papi']) {
+    await page.fill('#input-seat', name);
+    await page.click('#btn-add-seat');
+  }
+  await page.waitForTimeout(200);
+  const seats = await page.$$eval('.seat-name', (els) => els.map((e) => e.textContent));
+  record('local: seats are added in the order they are typed',
+    seats.join(',') === 'Conor,Jude,Rouse,Papi', seats.join(','));
+  record('local: and the options panel is there to set',
+    (await page.$$('#local-settings .setting')).length === 6);
+
+  // Removing one takes it out and leaves the order alone.
+  await page.click('.seat:nth-child(2) .btn-tiny');
+  await page.waitForTimeout(200);
+  const afterRemove = await page.$$eval('.seat-name', (els) => els.map((e) => e.textContent));
+  record('local: a seat can be removed', afterRemove.join(',') === 'Conor,Rouse,Papi',
+    afterRemove.join(','));
+
+  await page.fill('#input-seat', 'Jude');
+  await page.click('#btn-add-seat');
+  await page.click('#btn-local-start');
+  await page.waitForTimeout(600);
+
+  record('local: starting goes straight to the game', await page.isVisible('#screen-game'));
+
+  const table = await page.evaluate(() => {
+    const host = window.__room;
+    const state = host.engine.state;
+    return {
+      phase: state.phase,
+      seated: state.players.filter((p) => !p.screen).map((p) => p.name),
+      screenPlays: state.players.some((p) => p.screen && state.turn === p.id),
+      hands: state.players.map((p) => p.hand.length),
+      deck: state.deck.length,
+      turn: state.players.find((p) => p.id === state.turn)?.name,
+    };
+  });
+  record('local: four players seated, the screen not among them',
+    table.seated.join(',') === 'Conor,Rouse,Papi,Jude', table.seated.join(','));
+  record('local: the screen never takes a turn', !table.screenPlays);
+  record('local: nobody holds cards', table.hands.every((n) => n === 0));
+  record('local: the full Mini Game pile is in play', table.deck === 430, table.deck);
+  record('local: and it is somebody\'s go', !!table.turn, table.turn);
+
+  const played = await page.evaluate(async () => {
+    const host = window.__room;
+    const seat = host.engine.state.turn;
+    host.actAs(seat, { type: 'draw' });
+    await new Promise((r) => setTimeout(r, 60));
+    const outcome = host.engine.legalActions(seat).find((a) => a.type === 'outcome');
+    const others = host.engine.state.players.filter((p) => !p.screen && p.id !== seat);
+    host.actAs(seat, {
+      type: 'outcome',
+      index: outcome.index,
+      targets: outcome.needs === 0 ? undefined : [others[0].id],
+    });
+    await new Promise((r) => setTimeout(r, 60));
+    return {
+      drew: !!host.engine.state.vars.current,
+      deck: host.engine.state.deck.length,
+      orders: host.engine.state.vars.orders.length,
+    };
+  });
+  record('local: the screen draws for whoever is up', played.drew);
+  record('local: off the shared pile', played.deck === 429, played.deck);
+  record('local: and hands out the drink', played.orders > 0, `${played.orders} orders`);
+  record('local: no errors playing from one screen', pageErrors.length === 0, pageErrors.join('; '));
+
+  /*
+   * And it has to be readable from the other side of a room. At TV shape the
+   * whole game must sit in one screenful — nobody scrolls a television — with
+   * the card beside its rule rather than marooned in the middle.
+   */
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.waitForTimeout(400);
+  const tv = await page.evaluate(() => {
+    const body = document.body;
+    const card = document.querySelector('#table-area .card-big');
+    const title = document.querySelector('#table-area .card-title');
+    const strip = document.querySelector('#players-strip');
+    const r = (el) => el?.getBoundingClientRect();
+    return {
+      flagged: body.classList.contains('is-screen'),
+      scrolls: document.documentElement.scrollHeight > window.innerHeight + 1,
+      handShown: !document.getElementById('hand-section').hidden,
+      screenInStrip: strip.textContent.includes('The screen'),
+      seats: strip.children.length,
+      card: r(card) && { h: Math.round(r(card).height), bottom: Math.round(r(card).bottom) },
+      titleLeftOfCard: r(title) && r(card) ? r(title).left > r(card).right - 2 : null,
+      titleSize: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
+      vh: window.innerHeight,
+    };
+  });
+  record('screen: the layout knows it is a screen', tv.flagged);
+  record('screen: the whole game fits one screenful', !tv.scrolls);
+  record('screen: no hand strip — this device holds no cards', !tv.handShown);
+  record('screen: the screen is not listed as a player',
+    !tv.screenInStrip && tv.seats === 4, `${tv.seats} seats`);
+  record('screen: the card is sized to the room', tv.card.h > 240, `${tv.card.h}px tall`);
+  record('screen: and stays inside the viewport', tv.card.bottom <= tv.vh, `${tv.card.bottom} of ${tv.vh}`);
+  record('screen: the rule is set beside the card, not under it', tv.titleLeftOfCard === true);
+  record('screen: at a size that reads across a room', tv.titleSize >= 30, `${tv.titleSize}px`);
+
+  // Back to a phone-ish viewport so the later checks are unaffected.
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // Mobile width must not produce a horizontal scrollbar.
   await page.setViewportSize({ width: 390, height: 780 });

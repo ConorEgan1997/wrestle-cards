@@ -42,6 +42,45 @@
           </label>
           <button class="btn" type="submit" id="btn-join">Join</button>
         </form>
+
+        <div class="divider"><span>or</span></div>
+
+        <button class="btn" id="btn-local">Play on this screen</button>
+        <small class="note">
+          One screen on the table, no phones needed. Mini Games only — anyone
+          who wants a hand can join with the code later.
+        </small>
+      </div>
+    </section>
+
+    <!-- =========================== local lobby ========================== -->
+    <section class="screen" id="screen-local" hidden>
+      <header class="masthead">
+        <h1>Round one screen</h1>
+        <p class="tagline">Everybody who's playing. Add them in the order you're sitting.</p>
+      </header>
+
+      <div class="panel">
+        <h2 class="section-title">Who's playing</h2>
+        <ul class="seat-list" id="local-seats"></ul>
+
+        <form class="join-row" id="form-seat">
+          <label class="field">
+            <span>Add a player</span>
+            <input id="input-seat" type="text" maxlength="20" autocomplete="off"
+                   autocapitalize="words" placeholder="Jude" />
+          </label>
+          <button class="btn" type="submit" id="btn-add-seat">Add</button>
+        </form>
+
+        <h2 class="section-title">Tonight's rules</h2>
+        <div id="local-settings"></div>
+
+        <div class="lobby-actions">
+          <button class="btn btn-primary" id="btn-local-start">Start</button>
+          <button class="btn btn-quiet" id="btn-local-back">Back</button>
+        </div>
+        <p class="hint" id="local-hint"></p>
       </div>
     </section>
 
@@ -119,10 +158,12 @@
       <div class="dock" id="dock">
         <div class="dock-inner">
           <div class="dock-actions" id="dock-actions"></div>
-          <div class="hand-head">
-            <span class="section-title">Your cards <span class="muted" id="hand-count"></span></span>
+          <div id="hand-section">
+            <div class="hand-head">
+              <span class="section-title">Your cards <span class="muted" id="hand-count"></span></span>
+            </div>
+            <div class="hand" id="hand"></div>
           </div>
-          <div class="hand" id="hand"></div>
         </div>
       </div>
     </section>

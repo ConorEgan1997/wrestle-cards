@@ -90,7 +90,7 @@ export class GameEngine {
   /* ---------------------- player management ---------------------- */
 
   /** Add a player, or mark an existing one reconnected. Returns the player. */
-  addPlayer({ id, name, isHost = false }) {
+  addPlayer({ id, name, isHost = false, local = false, screen = false }) {
     const existing = this.state.players.find((p) => p.id === id);
     if (existing) {
       existing.connected = true;
@@ -109,8 +109,31 @@ export class GameEngine {
       id,
       name: name || `Player ${this.state.players.length + 1}`,
       connected: true,
-      ready: false,
+      /*
+       * A local seat is ready the moment it exists: there is no phone to tap
+       * "I'm ready" on, and the shared screen's Start button is the consent.
+       */
+      ready: !!local,
       isHost,
+      /*
+       * A seat with nobody's phone behind it. Everyone playing round one
+       * screen sits in a local seat: they are in the turn order and in the
+       * tally, but every action on their behalf is taken on the shared
+       * screen, and they hold no cards, because there is nowhere private to
+       * hold them. A phone can claim the seat later and be dealt in.
+       */
+      local: !!local,
+      /*
+       * A screen is a seat that runs the table without playing at it: the
+       * laptop on the coffee table, or the TV everyone is looking at. It
+       * holds the room code, shows the cards and takes actions on behalf of
+       * the seats around it, but it is dealt nothing, never takes a turn and
+       * never appears in the tally. Without this the screen would be a
+       * player who always passes, which is worse than it sounds — it is a
+       * dead seat in the turn order and a permanent clean sheet at the top
+       * of the scoreboard.
+       */
+      screen: !!screen,
       hand: [],
       score: 0,
     };
@@ -120,12 +143,46 @@ export class GameEngine {
   }
 
   /**
+   * A device takes over a seat the shared screen has been playing.
+   *
+   * The seat keeps its name, its place in the turn order and everything it
+   * has drunk — it is the same player, now with somewhere private to hold
+   * cards — so the ruleset is given the chance to deal it in. Only a `local`
+   * seat can be claimed: reaching over and taking a seat somebody is playing
+   * from their own phone would make every hidden hand in the game a lie.
+   */
+  claimSeat(seatId, newId, name) {
+    const seat = this.getPlayer(seatId);
+    if (!seat) throw new IllegalAction('That seat is gone');
+    if (!seat.local) throw new IllegalAction('Somebody is already playing that seat');
+    if (this.getPlayer(newId)) throw new IllegalAction('You already have a seat at this table');
+
+    seat.id = newId;
+    seat.local = false;
+    seat.connected = true;
+    seat.ready = true;
+    if (name) seat.name = name;
+    if (this.state.turn === seatId) this.state.turn = newId;
+
+    // Everything the ruleset has filed under the old id — drink orders,
+    // curses, votes — has to follow the seat, or the player quietly loses it.
+    this.rules.reseat?.(this.state, seatId, newId, this.ctx());
+
+    if (this.state.phase === 'playing') this.rules.dealIn?.(this.state, seat, this.ctx());
+    this.log(`${seat.name} took their seat on a phone`);
+    return seat;
+  }
+
+  /**
    * Mark a player disconnected. We deliberately do not remove them mid-game:
    * their hand must stay put so they can rejoin with the same identity.
    */
   dropPlayer(id) {
     const player = this.getPlayer(id);
     if (!player) return;
+    // A local seat has no connection to lose — the shared screen is still
+    // playing it, so a stray disconnect must not empty the chair.
+    if (player.local) return;
     player.connected = false;
     player.ready = false;
     this.log(`${player.name} disconnected`);
@@ -184,11 +241,17 @@ export class GameEngine {
     }
   }
 
+  /** Everyone who actually plays — the screens run the table, they don't sit at it. */
+  get seated() {
+    return this.state.players.filter((p) => !p.screen);
+  }
+
   /** True when there are enough connected players and all of them are ready. */
   canStart() {
     const active = this.state.players.filter((p) => p.connected);
+    const playing = active.filter((p) => !p.screen);
     const min = this.rules.minPlayers ?? 2;
-    return active.length >= min && active.every((p) => p.ready);
+    return playing.length >= min && active.every((p) => p.ready);
   }
 
   /* ---------------------------- setup ---------------------------- */
@@ -197,7 +260,7 @@ export class GameEngine {
     if (this.state.phase === 'playing') throw new IllegalAction('Already playing');
     const active = this.state.players.filter((p) => p.connected);
     const min = this.rules.minPlayers ?? 2;
-    if (active.length < min) {
+    if (active.filter((p) => !p.screen).length < min) {
       throw new IllegalAction(`Need at least ${min} players to start`);
     }
 
@@ -219,7 +282,7 @@ export class GameEngine {
     this.state.direction = 1;
     this.state.round = 1;
     this.state.phase = 'playing';
-    this.state.turn = this.state.players[0].id;
+    this.state.turn = (this.seated[0] ?? this.state.players[0]).id;
 
     this.rules.setup(this.state, this.ctx());
     this.log('Game started');
@@ -284,10 +347,12 @@ export class GameEngine {
     if (!players.length) return null;
     let index = this.seatOf(this.state.turn);
     if (index === -1) index = 0;
+    const playable = (p) => p.connected && !p.screen;
     for (let moved = 0; moved < steps; ) {
       index = (index + this.state.direction + players.length) % players.length;
-      if (players[index].connected) moved++;
-      else if (!players.some((p) => p.connected)) break;
+      if (playable(players[index])) moved++;
+      // Nobody left who can take a turn — stop rather than spin forever.
+      else if (!players.some(playable)) break;
     }
     this.state.turn = players[index].id;
     return this.state.turn;

@@ -140,8 +140,8 @@ export function renderLobby(view, { code, isHost, canStart }) {
  * here. The host taps to change them; everyone else sees the same panel with
  * the buttons inert, so the table can see what it has agreed to.
  */
-export function renderSettings(view, schema, { isHost, onChange }) {
-  const slot = document.getElementById('settings');
+export function renderSettings(view, schema, { isHost, onChange, into = 'settings' }) {
+  const slot = document.getElementById(into);
   if (!slot) return;
   const settings = view.settings ?? {};
 
@@ -171,6 +171,41 @@ export function renderSettings(view, schema, { isHost, onChange }) {
   );
 }
 
+/**
+ * The seat list in the one-screen lobby.
+ *
+ * Just names, in the order people are sitting, because that order is the
+ * game: half the deck says "the person to your left". No ready buttons and
+ * no wrestler pickers — there are no phones here to tap them on.
+ */
+export function renderLocalLobby(seats, { code, onRemove }) {
+  const list = document.getElementById('local-seats');
+  if (!list) return;
+
+  list.replaceChildren(
+    ...seats.map((seat, i) => {
+      const row = document.createElement('li');
+      row.className = 'seat';
+      row.append(text('span', String(i + 1), 'seat-n'));
+      row.append(text('span', seat.name, 'seat-name'));
+      row.append(button('Remove', () => onRemove(seat.id), 'btn btn-quiet btn-tiny'));
+      return row;
+    }),
+  );
+
+  const hint = document.getElementById('local-hint');
+  if (!hint) return;
+  if (seats.length < 2) {
+    hint.textContent = 'Add at least two players.';
+  } else if (code) {
+    hint.textContent =
+      `Ready. Anyone who wants a hand of cards can join at this address with code ${code} — `
+      + 'during the game is fine, they get dealt in where they sit.';
+  } else {
+    hint.textContent = 'Ready. No room code tonight, so it is the screen only — which is the whole game.';
+  }
+}
+
 function tag(text, className) {
   const el = document.createElement('span');
   el.className = `tag ${className}`.trim();
@@ -188,7 +223,20 @@ export const FLASH_MS = 4500;
 export const ANNOUNCE_MS = 12000;
 
 export function renderGame(view, handlers) {
-  renderHud(view);
+  /*
+   * One renderer, two audiences. A phone shows you your own game; a screen in
+   * the middle of the table shows the room its game, and acts for whichever
+   * seat is up. Almost everything is shared — the card, the clock, the
+   * announcements — so the difference is a class on the game screen plus the
+   * three parts that are genuinely about *you*: your hand, your turn, and
+   * your buttons.
+   */
+  const screen = !!view.screen;
+  // On the body, not the game section: the clock takeover and the focus view
+  // are siblings of it, and they need to go big on a television too.
+  document.body.classList.toggle('is-screen', screen);
+
+  renderHud(view, screen);
   renderAnnounce(view);
   renderPending(view);
   renderBanners(view);
@@ -196,18 +244,57 @@ export function renderGame(view, handlers) {
   renderDrinks(view);
   renderTable(view, handlers);
   renderPlayers(view, handlers);
-  renderDockActions(view, handlers);
+  if (screen) renderSeatActions(view, handlers);
+  else renderDockActions(view, handlers);
   renderHand(view, handlers);
   renderLog(view);
 }
 
-function renderHud(view) {
+function renderHud(view, screen = false) {
   const current = view.players.find((p) => p.id === view.turn);
   const el = $('hud-turn');
-  el.classList.toggle('is-you', !!view.yourTurn);
+  el.classList.toggle('is-you', !screen && !!view.yourTurn);
   el.replaceChildren(
-    text('span', view.yourTurn ? 'Your turn' : `${current?.name ?? '—'}'s turn`),
+    text('span', screen
+      ? `${current?.name ?? '—'} is up`
+      : view.yourTurn ? 'Your turn' : `${current?.name ?? '—'}'s turn`),
     text('span', `Round ${view.round} · ${view.deckCount} Mini Games left`, 'sub'),
+  );
+}
+
+/**
+ * The buttons on a shared screen.
+ *
+ * Whoever is up has no phone, so their options appear here with their name on
+ * them — "Conor: draw a Mini Game" — and the screen sends them as that seat.
+ * Only the one seat's buttons are shown: the whole room is looking at this,
+ * and four people's options at once is how you end up pressing the wrong one
+ * four drinks in.
+ */
+function renderSeatActions(view, handlers) {
+  const dock = $('dock-actions');
+  const seat = view.players.find((p) => p.id === view.turn);
+  const actions = view.seatActions?.[view.turn] ?? [];
+  const measure = view.settings?.measure;
+
+  // Resolving the card that is on the table beats everything else.
+  const outcomes = actions.filter((a) => a.type === 'outcome');
+  const shown = outcomes.length
+    ? outcomes
+    : actions.filter((a) => ['draw', 'endTurn', 'unstick'].includes(a.type));
+
+  if (!seat || !shown.length) {
+    dock.replaceChildren();
+    return;
+  }
+
+  dock.replaceChildren(
+    text('div', `${seat.name} —`, 'seat-turn'),
+    ...shown.map((action) => button(
+      relabel(action, measure),
+      () => handlers.onSeatAct(seat.id, action),
+      action.type === 'draw' ? 'btn btn-gold btn-big' : 'btn btn-big',
+    )),
   );
 }
 
@@ -557,7 +644,12 @@ function renderTable(view, handlers) {
       : text('p', 'Tap the card to read it', 'card-text card-text-hint'),
   );
 
-  if (!view.legalActions.some((a) => a.type === 'outcome')) {
+  /*
+   * On a phone this says who you are waiting for. On the shared screen the
+   * answer is "you, on the telly in front of you", so it would be telling
+   * the room to wait for itself.
+   */
+  if (!view.screen && !view.legalActions.some((a) => a.type === 'outcome')) {
     area.append(text('p', `${drawer?.name ?? 'Someone'} is resolving this one.`, 'table-prompt'));
   }
 }
@@ -588,6 +680,17 @@ function renderDockActions(view, handlers) {
     );
     return;
   }
+
+  /*
+   * Waiting on somebody else. The dock would otherwise be empty, which is
+   * exactly the moment a table gets stuck — so it holds the way out instead,
+   * quietly, below whatever the screen is already saying.
+   */
+  const out = view.legalActions.find((a) => a.type === 'unstick');
+  if (out) {
+    dock.replaceChildren(button(out.label, () => handlers.onAct({ type: 'unstick' }), 'btn btn-quiet'));
+    return;
+  }
   dock.replaceChildren();
 }
 
@@ -610,7 +713,9 @@ export function watchDock() {
 function renderPlayers(view, handlers) {
   const now = hostNow();
   $('players-strip').replaceChildren(
-    ...view.players.map((player) => {
+    // A screen runs the table; it has no cards and no tally, so showing it
+    // among the players is just a permanent clean sheet at the top.
+    ...view.players.filter((p) => !p.screen).map((player) => {
       const el = document.createElement('button');
       el.type = 'button';
       el.className = 'player-chip';
@@ -619,9 +724,10 @@ function renderPlayers(view, handlers) {
 
       el.append(text('span', player.name + (player.id === view.you?.id ? ' (you)' : ''), 'n'));
       if (player.wrestler) el.append(text('span', player.wrestler, 'w'));
-      el.append(
-        text('span', `${player.handCount ?? 0} cards · ${tallyText(player, view.settings?.measure)}`, 's'),
-      );
+      // A seat with no phone holds no cards, so "0 cards" is just noise on
+      // the one screen where every seat is like that.
+      const tally = tallyText(player, view.settings?.measure);
+      el.append(text('span', player.local ? tally : `${player.handCount ?? 0} cards · ${tally}`, 's'));
 
       const badges = document.createElement('div');
       badges.className = 'badges';
@@ -646,7 +752,9 @@ export function tallyText(player, measure = 'seconds') {
 }
 
 function renderHand(view, handlers) {
-  const hand = view.you?.hand ?? [];
+  const hand = view.screen ? [] : (view.you?.hand ?? []);
+  const section = document.getElementById('hand-section');
+  if (section) section.hidden = view.screen && !hand.length;
   $('hand-count').textContent = view.canSwap
     ? `(${hand.length}) · tap one to play or swap`
     : hand.length ? `(${hand.length})` : '';
