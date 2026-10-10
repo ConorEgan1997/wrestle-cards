@@ -25,8 +25,12 @@
     <script type="module">
       import { HostRoom, ClientRoom } from './js/room.js';
       import { LoopHost, LoopClient } from './js/net.js';
-      import { loadDeck } from './js/rules/index.js';
-      import { renderGame, renderLobby, syncClock, showScreen, tickCountdowns } from './js/ui.js';
+      import { loadDeck, eventCardOptions } from './js/rules/index.js';
+      import {
+        renderGame, renderLobby, syncClock, showScreen, tickCountdowns, watchDock, fillCardList,
+        renderSettings, openFocus,
+      } from './js/ui.js';
+      import { SETTINGS_SCHEMA } from './js/rules/wrestling.js';
 
       const settle = () => new Promise((r) => setTimeout(r, 12));
       const checks = [];
@@ -41,6 +45,8 @@
         check('app markup loaded', !!document.getElementById('screen-game'));
 
         await loadDeck('cards/deck.json');
+        fillCardList(eventCardOptions());
+        watchDock();
 
         let hostView = null;
         const host = new HostRoom({
@@ -55,6 +61,10 @@
             showScreen(view.phase === 'lobby' ? 'lobby' : 'game');
             if (view.phase === 'lobby') {
               renderLobby(view, { code: host.code, isHost: true, canStart: host.canStart() });
+              renderSettings(view, SETTINGS_SCHEMA, {
+                isHost: true,
+                onChange: (patch) => host.setSettings(patch),
+              });
             } else {
               renderGame(view, {
                 onAct: (a) => host.act(a),
@@ -91,6 +101,8 @@
         check('all three seated', hostView.players.length === 3);
         check('wrestlers carried across', hostView.players.every((p) => p.wrestler));
         check('lobby rendered', document.querySelectorAll('#lobby-players li').length === 3);
+        check('options panel rendered', document.querySelectorAll('#settings .setting').length === 6,
+          document.querySelectorAll('#settings .setting').length);
 
         host.setReady(true);
         guests.forEach((g) => g.room.setReady(true));
@@ -100,11 +112,19 @@
         host.start();
         await settle();
         check('night under way', hostView.phase === 'playing', hostView.phase);
-        check('four Event Cards each', hostView.players.every((p) => p.hand.length === 4));
-        check('76 Mini Games stacked', hostView.deckCount === 76, hostView.deckCount);
+        check('four cards each', hostView.players.every((p) => p.handCount === 4));
+        check('other hands are hidden', hostView.players
+          .filter((p) => p.id !== host.playerId)
+          .every((p) => p.hand === undefined));
+        check('430 Mini Games stacked', hostView.deckCount === 430, hostView.deckCount);
         check(
           'a guest sees the same table',
-          guests[0].view.deckCount === 76 && guests[0].view.you.hand.length === 4,
+          guests[0].view.deckCount === 430 && guests[0].view.you.hand.length === 4,
+        );
+        check(
+          'the guess list was filled',
+          document.querySelectorAll('#event-card-list option').length === 172,
+          document.querySelectorAll('#event-card-list option').length,
         );
 
         // The hand rendered as real card images.
@@ -112,7 +132,17 @@
         check('hand rendered with card art', handCards.length === 4, handCards.length);
         check(
           'card images point at real files',
-          [...handCards].every((img) => /cards\/event-\d\d\.webp$/.test(img.getAttribute('src'))),
+          [...handCards].every((img) =>
+            /cards\/(event|ppv|ppc|mitb)-\d+\.webp$/.test(img.getAttribute('src'))),
+        );
+        // Two packs drawn to different shapes: every card frame must carry the
+        // ratio of its own art, or squat cards get cropped.
+        check(
+          'each card sizes itself from its own art',
+          [...document.querySelectorAll('#hand .card')].every((el) =>
+            /\d+ \/ \d+/.test(el.style.getPropertyValue('--card-ratio'))),
+          [...document.querySelectorAll('#hand .card')]
+            .map((el) => el.style.getPropertyValue('--card-ratio')).join(', '),
         );
 
         // Play some turns: draw, take the first outcome, settle every drink.
@@ -137,10 +167,13 @@
             await settle();
           }
 
-          for (const order of [...(host.engine.state.vars.orders || [])]) {
-            const who = rooms[order.playerId];
-            who?.act({ type: 'startOrder', orderId: order.id });
-            who?.act({ type: 'finishOrder', orderId: order.id });
+          // Whoever dealt the drink out runs the clock, same as a real table.
+          const batches = [...new Set((host.engine.state.vars.orders || []).map((o) => o.batch))];
+          for (const batch of batches) {
+            const order = host.engine.state.vars.orders.find((o) => o.batch === batch);
+            const runner = rooms[order.from] ?? host;
+            runner.act({ type: 'startBatch', batch });
+            runner.act({ type: 'finishBatch', batch });
           }
           if (host.engine.state.vars.vote) {
             for (const p of host.engine.state.players) {
@@ -148,13 +181,14 @@
             }
           }
           await settle();
-          rooms[hostView.turn === seat.playerId ? seat.playerId : hostView.turn]
-            ?.act({ type: 'endTurn' });
+          // The turn ends itself once the card's countdown is settled; only a
+          // card that cost nobody a drink still needs ending by hand.
+          if (hostView.turn === seat.playerId) seat.act({ type: 'endTurn' });
           await settle();
         }
 
         check('turns were played', hostView.round > 1, `round ${hostView.round}`);
-        check('deck went down', hostView.deckCount < 76, hostView.deckCount);
+        check('deck went down', hostView.deckCount < 430, hostView.deckCount);
         check('game screen is the one on show', !document.getElementById('screen-game').hidden);
         check('game table rendered', !!document.querySelector('#table-area'));
         check('player chips rendered', document.querySelectorAll('.player-chip').length === 3);
@@ -173,6 +207,17 @@
 
         window.__host = host;
         window.__guests = guests;
+        window.__openFocus = openFocus;
+        // Re-draw the table from whatever state the engine is in. The visual
+        // checks use this to put a particular card on the table — the two
+        // packs are drawn to different shapes and the only way to know a
+        // squat card is not being cropped is to look at one.
+        window.__render = () => renderGame(host.engine.viewFor(host.playerId), {
+          onAct: (a) => host.act(a),
+          onOutcome: () => {},
+          onShowCard: () => {},
+          onShowPlayer: () => {},
+        });
       } catch (err) {
         check('harness ran without throwing', false, err.stack || String(err));
       }

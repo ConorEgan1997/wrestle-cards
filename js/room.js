@@ -129,6 +129,15 @@ export class HostRoom {
     this.#publish();
   }
 
+  setSettings(patch) {
+    try {
+      this.engine.setSettings(patch);
+    } catch (err) {
+      this.onError?.(err.message);
+    }
+    this.#publish();
+  }
+
   start() {
     try {
       this.engine.start();
@@ -177,6 +186,11 @@ export class HostRoom {
         });
       case 'profile':
         return this.#withPlayer(connId, (id) => this.engine.setProfile(id, msg.patch));
+      case 'settings':
+        // Options are the host's call — a guest asking is simply ignored.
+        return this.#withPlayer(connId, (id) => {
+          if (this.engine.getPlayer(id)?.isHost) this.engine.setSettings(msg.patch);
+        });
       case 'chat':
         return this.#withPlayer(connId, (id) => this.#relayChat(id, msg.text));
       default:
@@ -278,6 +292,10 @@ export class ClientRoom {
 
   setProfile(patch) {
     this.transport.send({ t: 'profile', patch });
+  }
+
+  setSettings(patch) {
+    this.transport.send({ t: 'settings', patch });
   }
 
   act(action) {

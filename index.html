@@ -64,6 +64,9 @@
           <input id="input-wrestler-lobby" type="text" maxlength="40" placeholder="Who are you backing?" />
         </label>
 
+        <h2 class="section-title">Tonight's rules</h2>
+        <div id="settings"></div>
+
         <div class="lobby-actions">
           <button class="btn" id="btn-ready">I'm ready</button>
           <button class="btn btn-primary" id="btn-start" hidden>Start</button>
@@ -125,6 +128,24 @@
     </section>
 
     <!--
+      A card, full screen and actually readable. The art is 380px wide at
+      source, so on a phone the only way to read the small print is to give it
+      the whole display.
+    -->
+    <div class="focus" id="focus" hidden>
+      <div class="focus-scroll">
+        <button class="focus-close" id="focus-close" aria-label="Close">×</button>
+        <img class="focus-art" id="focus-art" alt="" />
+        <div class="focus-body">
+          <div class="focus-kind" id="focus-kind"></div>
+          <h2 class="focus-title" id="focus-title"></h2>
+          <p class="focus-text" id="focus-text"></p>
+        </div>
+      </div>
+      <div class="focus-actions" id="focus-actions"></div>
+    </div>
+
+    <!--
       The reveal. Once a face-down card has been named or taken, it turns over
       on every screen in the room before play carries on.
     -->
@@ -146,7 +167,7 @@
       actually looking.
     -->
     <div class="timer-takeover" id="timer" hidden>
-      <div class="timer-inner">
+      <div class="timer-inner" id="timer-inner">
         <div class="timer-why" id="timer-why"></div>
         <div class="timer-who" id="timer-who"></div>
         <div class="timer-what" id="timer-what"></div>

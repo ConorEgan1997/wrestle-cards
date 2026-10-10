@@ -98,11 +98,12 @@ test('starting deals Event Cards and never leaks the Mini Game pile', async () =
   assert.equal(bob.you.hand.length, 4);
   assert.equal(bob.players.length, 3);
 
-  // Event Cards are public on purpose — they are rules the table enforces.
-  assert.ok(bob.players.every((p) => p.hand.length === 4));
+  // Hands are secret — everyone else is a count, so a card can be guessed at.
+  assert.ok(bob.players.every((p) => p.hand === undefined));
+  assert.ok(bob.players.every((p) => p.handCount === 4));
 
   // The draw pile is the secret, and it stays on the host.
-  assert.equal(bob.deckCount, 76);
+  assert.equal(bob.deckCount, 430);
   const serialised = JSON.stringify(bob);
   for (const card of host.engine.state.deck.slice(0, 5)) {
     assert.ok(!serialised.includes(`"${card.id}"`), `leaked upcoming card ${card.id}`);
@@ -146,7 +147,7 @@ test('a legal action from a client updates every view', async () => {
   const asHostSeesIt = host.engine.viewFor(host.playerId);
   assert.equal(asHostSeesIt.current.card.id, clients[0].view.current.card.id,
     'and the host is showing the same card');
-  assert.equal(asHostSeesIt.deckCount, 75);
+  assert.equal(asHostSeesIt.deckCount, 429);
   host.close();
 });
 

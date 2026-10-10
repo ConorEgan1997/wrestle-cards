@@ -79,6 +79,8 @@ export class GameEngine {
       discard: [], // face-up pile; last element is the top card
       table: [], // shared face-up area (melds, tricks in progress, etc.)
       vars: {}, // free-form scratch space owned by the rules module
+      // Host-chosen options, fixed in the lobby and locked once play starts.
+      settings: { ...(rules.defaultSettings ?? {}) },
       log: [],
       result: null, // set when phase === 'over'
       round: 0,
@@ -142,6 +144,27 @@ export class GameEngine {
   setReady(id, ready) {
     const player = this.getPlayer(id);
     if (player) player.ready = !!ready;
+  }
+
+  /**
+   * Change a game option.
+   *
+   * Only in the lobby, and only keys the rules module declares in
+   * `settingsSchema` with a value it lists — so a client can neither invent an
+   * option nor set a real one to something the rules have never seen.
+   */
+  setSettings(patch) {
+    if (this.state.phase !== 'lobby') {
+      throw new IllegalAction('The options are fixed once the game starts');
+    }
+    const schema = this.rules.settingsSchema ?? {};
+    for (const [key, value] of Object.entries(patch ?? {})) {
+      const option = schema[key];
+      if (!option) continue;
+      if (!option.choices.some((choice) => choice.value === value)) continue;
+      this.state.settings[key] = value;
+    }
+    return this.state.settings;
   }
 
   /**

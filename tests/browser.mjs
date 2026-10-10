@@ -36,40 +36,347 @@ try {
   harness.on('pageerror', (err) => harnessErrors.push(err.message));
 
   await harness.goto(`${BASE}/tests/harness.html`);
-  await harness.waitForFunction(() => window.__harness, null, { timeout: 20000 });
-  const outcome = await harness.evaluate(() => window.__harness);
-  for (const check of outcome.checks) record(`harness: ${check.name}`, check.pass, check.detail);
-  record('harness: no uncaught errors', harnessErrors.length === 0, harnessErrors.join('; '));
 
-  /* ------------------- 1b. the drink countdown actually runs ------------- */
+  /*
+   * A broken import anywhere in the module graph stops the harness before it
+   * can report anything. Catch that rather than dying on a bare timeout — the
+   * page errors below are what actually tell you what went wrong, and the
+   * checks against the real page still get to run.
+   */
+  let harnessRan = true;
+  try {
+    await harness.waitForFunction(() => window.__harness, null, { timeout: 20000 });
+  } catch {
+    harnessRan = false;
+    record('harness: finished at all', false, harnessErrors.join('; ') || 'timed out with no error');
+  }
+
+  if (harnessRan) {
+    const outcome = await harness.evaluate(() => window.__harness);
+    for (const check of outcome.checks) record(`harness: ${check.name}`, check.pass, check.detail);
+    record('harness: no uncaught errors', harnessErrors.length === 0, harnessErrors.join('; '));
+  }
+
+  /* -------------------- 1e. the card focus view -------------------------- */
+  if (harnessRan) {
+    /*
+     * Opened on a card from each pack. The first pack was transcribed, so its
+     * rules must be real text under the art; the cards3.1 set never was, and
+     * for those the text block has to get out of the way rather than sit there
+     * empty. Both are opened by id, because picking whatever happened to be
+     * dealt made this check depend on the shuffle.
+     */
+    const look = async (id) => harness.evaluate(async (id) => {
+      const deck = await (await fetch('/cards/deck.json')).json();
+      const card = deck.find((c) => c.id === id);
+      window.__openFocus(card, [{ type: 'swapCard', cardId: card.id, label: 'Bin it' }], {});
+      await new Promise((r) => setTimeout(r, 60));
+
+      const box = document.getElementById('focus');
+      const art = document.getElementById('focus-art');
+      const body = document.getElementById('focus-text');
+      return {
+        open: !box.hidden,
+        src: art.getAttribute('src'),
+        title: document.getElementById('focus-title').textContent,
+        kind: document.getElementById('focus-kind').textContent,
+        text: body.textContent,
+        textShown: !body.hidden,
+        artWidth: Math.round(art.getBoundingClientRect().width),
+        artHeight: Math.round(art.getBoundingClientRect().height),
+        viewport: window.innerWidth,
+        fontSize: parseFloat(getComputedStyle(body).fontSize),
+        actions: document.querySelectorAll('#focus-actions .btn').length,
+      };
+    }, id);
+
+    const focus = await look('event-24');
+    record('harness: tapping a card opens it full screen', focus.open);
+    record('harness: with its own art', /cards\/[a-z]+-\d+\.webp/.test(focus.src), focus.src);
+    record('harness: its rules are real text, not just pixels', focus.text.length > 20, focus.title);
+    record('harness: and it says what kind of card it is', /Event Card/.test(focus.kind), focus.kind);
+    record(
+      'harness: the art fills the width',
+      focus.artWidth >= Math.min(380, focus.viewport * 0.85),
+      `${focus.artWidth}px of ${focus.viewport}px`,
+    );
+    record('harness: at a readable size', focus.fontSize >= 16, `${focus.fontSize}px`);
+    record('harness: with its actions docked', focus.actions === 1);
+    await harness.click('#focus-close');
+
+    // A squat card from the second pack: the art must not be squeezed into the
+    // first pack's shape, and the empty text block must not leave a gap.
+    const squat = await look('mg-421');
+    record('harness: a second-pack card opens too', squat.open);
+    record('harness: labelled as its own kind', /Mini Game/.test(squat.kind), squat.kind);
+    record('harness: with no empty text block under it', !squat.textShown);
+    record(
+      'harness: and its own proportions, not pack 1\'s',
+      Math.abs(squat.artHeight / squat.artWidth - 728 / 400) < 0.08,
+      `${squat.artWidth}x${squat.artHeight}`,
+    );
+
+    await harness.click('#focus-close');
+    record('harness: and it closes', !(await harness.isVisible('#focus')));
+  }
+
+  /* ---------------- 1c. countering a card, through the UI ---------------- */
+  if (harnessRan) {
+  // Bob plays a card at Ann (the host, whose screen the harness renders).
+  const played = await harness.evaluate(() => {
+    const bob = window.__guests[0].room;
+    const host = window.__host;
+    const card = host.engine.getPlayer(bob.playerId).hand[0];
+    bob.act({ type: 'playEvent', cardId: card.id, index: 0, targets: [host.playerId] });
+    return card.id;
+  });
+  await harness.waitForTimeout(200);
+
+  record('harness: a face-down card is announced', await harness.isVisible('#pending .pending-banner'));
+  record(
+    'harness: the card itself is not in the page',
+    !(await harness.content()).includes(`cards/${played}.webp`),
+    played,
+  );
+
+  // A wrong guess, typed the way a player would.
+  await harness.evaluate(() => {
+    window.__host.act({ type: 'guessCard', guessText: 'not a real card' });
+  });
+  await harness.waitForTimeout(250);
+  record('harness: a wrong guess resolves the card', await harness.isVisible('#flash'));
+  record(
+    'harness: the reveal shows the card art',
+    (await harness.getAttribute('#flash-art', 'src')) === `cards/${played}.webp`,
+  );
+  record(
+    'harness: and it landed on the player it was aimed at',
+    await harness.evaluate((id) => {
+      const host = window.__host;
+      const order = host.engine.state.vars.orders.at(-1);
+      return !order || order.playerId === host.playerId;
+    }, played),
+  );
+
+  // Now a correct guess: it should turn back on whoever played it.
+  const countered = await harness.evaluate(async () => {
+    const host = window.__host;
+    const bob = window.__guests[0].room;
+    for (const o of [...host.engine.state.vars.orders]) host.act({ type: 'finishBatch', batch: o.batch });
+    const card = host.engine.getPlayer(bob.playerId).hand[0];
+    bob.act({ type: 'playEvent', cardId: card.id, index: 0, targets: [host.playerId] });
+    await new Promise((r) => setTimeout(r, 30));
+    host.act({ type: 'guessCard', guessId: card.id });
+    await new Promise((r) => setTimeout(r, 30));
+    return {
+      counteredBy: host.engine.state.vars.lastPlay.counteredBy,
+      landedOn: host.engine.state.vars.orders.at(-1)?.playerId ?? null,
+      bobId: bob.playerId,
+    };
+  });
+  await harness.waitForTimeout(200);
+  record('harness: calling it right is recorded', !!countered.counteredBy, countered.counteredBy);
+  record(
+    'harness: and the drink goes back on the player who played it',
+    countered.landedOn === null || countered.landedOn === countered.bobId,
+  );
+  record(
+    'harness: the reveal says who called it',
+    (await harness.textContent('#flash-result')).includes('called it'),
+  );
+
+  // Clear the decks before the later checks.
   await harness.evaluate(() => {
     const host = window.__host;
-    host.act({ type: 'give', targets: [host.playerId], seconds: 20, label: 'Countdown check' });
-    const mine = host.engine.state.vars.orders.find((o) => o.playerId === host.playerId);
-    host.act({ type: 'startOrder', orderId: mine.id });
+    for (const o of [...host.engine.state.vars.orders]) host.act({ type: 'finishBatch', batch: o.batch });
+    host.engine.state.vars.lastPlay = null;
   });
-  const first = await harness.textContent('.countdown[data-order]');
+  await harness.waitForTimeout(150);
+
+  /* ------------------ 1d. the stake, the botch and the swap -------------- */
+  const stake = await harness.evaluate(async () => {
+    const host = window.__host;
+    const bob = window.__guests[0].room;
+    const card = host.engine.getPlayer(bob.playerId).hand[0];
+    bob.act({ type: 'playEvent', cardId: card.id, index: 0, targets: [host.playerId] });
+    await new Promise((r) => setTimeout(r, 30));
+    return host.engine.viewFor(host.playerId).pending.stake;
+  });
+  await harness.waitForTimeout(200);
+  record(
+    'harness: the stake is shown while the card is face down',
+    (await harness.textContent('#pending')).includes('at stake'),
+    `${stake.seconds ?? 'down'}`,
+  );
+
+  // Botch it deliberately and check the doubling reaches the screen.
+  const botch = await harness.evaluate(async () => {
+    const host = window.__host;
+    const base = host.engine.viewFor(host.playerId).pending.stake.seconds;
+    host.act({ type: 'guessCard', guessText: 'definitely not the card' });
+    await new Promise((r) => setTimeout(r, 30));
+    const order = host.engine.state.vars.orders.at(-1);
+    return { base, got: order?.seconds ?? null, down: !!order?.down };
+  });
+  await harness.waitForTimeout(250);
+  record(
+    'harness: a botched counter doubles the drink',
+    botch.down || botch.base === null || botch.got === botch.base * 2,
+    `${botch.base} -> ${botch.got}`,
+  );
+  record(
+    'harness: and the reveal says it was botched',
+    botch.down || (await harness.textContent('#flash-result')).toLowerCase().includes('botched'),
+  );
+
+  await harness.evaluate(() => {
+    const host = window.__host;
+    for (const o of [...host.engine.state.vars.orders]) host.act({ type: 'finishBatch', batch: o.batch });
+    host.engine.state.vars.lastPlay = null;
+  });
+  await harness.waitForTimeout(150);
+
+  // The swap: once per turn, costs a sip.
+  const swap = await harness.evaluate(async () => {
+    const host = window.__host;
+    host.engine.state.turn = host.playerId;
+    host.engine.state.vars.swappedThisTurn = false;
+    const before = host.engine.getPlayer(host.playerId).hand.map((c) => c.id);
+    host.act({ type: 'swapCard', cardId: before[0] });
+    await new Promise((r) => setTimeout(r, 30));
+    const after = host.engine.getPlayer(host.playerId).hand.map((c) => c.id);
+    return {
+      gone: !after.includes(before[0]),
+      size: after.length,
+      sip: host.engine.state.vars.orders.at(-1)?.seconds ?? null,
+      offeredAgain: host.engine.legalActions(host.playerId).some((a) => a.type === 'swapCard'),
+    };
+  });
+  record('harness: swapping bins the card and refills the hand', swap.gone && swap.size === 4);
+  record('harness: and costs a 3 second sip', swap.sip === 3, `${swap.sip}s`);
+  record('harness: only once a turn', !swap.offeredAgain);
+
+  await harness.evaluate(() => {
+    const host = window.__host;
+    for (const o of [...host.engine.state.vars.orders]) host.act({ type: 'finishBatch', batch: o.batch });
+  });
+  await harness.waitForTimeout(150);
+
+  /* ------------- 1a. the dock keeps the buttons out of the hand ---------- */
+  // Put a card in play as the host so the outcome buttons appear.
+  await harness.evaluate(() => {
+    const host = window.__host;
+    host.engine.state.turn = host.playerId;
+    host.act({ type: 'draw' });
+  });
+  await harness.waitForTimeout(250);
+  const dock = await harness.evaluate(() => {
+    const buttons = [...document.querySelectorAll('#dock-actions .btn')];
+    const hand = document.querySelector('.hand').getBoundingClientRect();
+    const last = buttons.at(-1)?.getBoundingClientRect();
+    return {
+      count: buttons.length,
+      clearsHand: !!last && last.bottom <= hand.top + 1,
+      onScreen: !!last && last.bottom <= window.innerHeight + 1 && last.top >= 0,
+    };
+  });
+  record('harness: outcome buttons are docked', dock.count >= 2, `${dock.count} buttons`);
+  record('harness: they sit above the hand, not behind it', dock.clearsHand);
+  record('harness: and are on screen without scrolling', dock.onScreen);
+  await harness.evaluate(() => window.__host.act({ type: 'endTurn' }));
+  await harness.waitForTimeout(200);
+
+  /* -------------------- 1b. the clock takes over the screen -------------- */
+  // Ann deals a drink out to Bob and Cat — one play, so one shared countdown.
+  // Anything still outstanding is cleared first, so this owns the clock.
+  const clockBatch = await harness.evaluate(() => {
+    const host = window.__host;
+    for (const o of [...host.engine.state.vars.orders]) {
+      host.act({ type: 'finishBatch', batch: o.batch });
+    }
+    const others = host.engine.state.players.filter((p) => p.id !== host.playerId);
+    host.act({
+      type: 'give',
+      targets: others.map((p) => p.id),
+      seconds: 20,
+      label: 'Countdown check',
+    });
+    return host.engine.state.vars.orders.at(-1).batch;
+  });
+  record('harness: the clock covers the screen', await harness.isVisible('#timer'));
+  record(
+    'harness: one timer for the whole play, not one each',
+    (await harness.locator('#timer-count').count()) === 1,
+  );
+  record(
+    'harness: it names who is drinking',
+    /Bob/.test(await harness.textContent('#timer-who')),
+    await harness.textContent('#timer-who'),
+  );
+  record(
+    'harness: the dealer gets the start button',
+    (await harness.textContent('#timer-actions')).includes('Start'),
+  );
+
+  await harness.click('#timer-actions .btn');
+  const first = await harness.textContent('#timer-count');
   await harness.waitForTimeout(1200);
-  const second = await harness.textContent('.countdown[data-order]');
+  const second = await harness.textContent('#timer-count');
   record(
     'harness: the countdown counts down',
     Number(first) > Number(second) && Number(second) > 0,
     `${first} -> ${second}`,
   );
 
-  // Finishing it scores the time against the drinker.
-  const scored = await harness.evaluate(() => {
+  // Finishing scores the time against everyone who was on that clock.
+  const scored = await harness.evaluate((batch) => {
     const host = window.__host;
-    const mine = host.engine.state.vars.orders.find((o) => o.playerId === host.playerId);
-    host.act({ type: 'finishOrder', orderId: mine.id });
-    return host.engine.getPlayer(host.playerId).seconds;
-  });
-  record('harness: finishing a drink adds to the tally', scored >= 20, `${scored}s`);
+    const before = Object.fromEntries(host.engine.state.players.map((p) => [p.id, p.seconds]));
+    host.act({ type: 'finishBatch', batch });
+    return host.engine.state.players
+      .filter((p) => p.id !== host.playerId)
+      .map((p) => p.seconds - before[p.id]);
+  }, clockBatch);
+  record(
+    'harness: finishing scores everyone on that clock',
+    scored.every((s) => s >= 20),
+    `+${scored.join('s, +')}s`,
+  );
+  record('harness: and the takeover clears', !(await harness.isVisible('#timer')));
+
+  } // end of the harness-dependent checks
 
   /* ------------------------- 2. the real page --------------------------- */
   const page = await browser.newPage();
   const pageErrors = [];
   page.on('pageerror', (err) => pageErrors.push(err.message));
+
+  /*
+   * Stand in for PeerJS so the host flow can be clicked through without the
+   * CDN or a real WebRTC connection.
+   *
+   * This exists because "Start a table" silently did nothing once: app.js
+   * imported something js/rules/index.js didn't export yet, so the module
+   * never loaded and no button on the page was wired up. Nothing here caught
+   * it, because nothing here had ever clicked the button.
+   */
+  await page.addInitScript(() => {
+    class FakeConnection {
+      constructor() { this.open = true; }
+      on() {} send() {} close() {}
+    }
+    window.Peer = class {
+      constructor(id) {
+        this.id = id || 'fake-peer';
+        this.handlers = {};
+        setTimeout(() => (this.handlers.open || []).forEach((fn) => fn(this.id)), 10);
+      }
+      on(event, fn) { (this.handlers[event] ||= []).push(fn); }
+      once(event, fn) { this.on(event, fn); }
+      connect() { return new FakeConnection(); }
+      destroy() {} reconnect() {}
+    };
+  });
 
   await page.goto(BASE);
   record('app: home screen visible', await page.isVisible('#screen-home'));
@@ -102,6 +409,38 @@ try {
     'app: short room code is rejected',
     (await page.textContent('.toast')).includes('too short'),
   );
+
+  // Hosting a table: the whole path from the button to a room code.
+  await page.goto(BASE);
+  await page.fill('#input-name', 'Conor');
+  await page.fill('#input-wrestler', 'Roman Reigns');
+  await page.click('#btn-host');
+  await page.waitForTimeout(900);
+
+  record('app: starting a table opens the lobby', await page.isVisible('#screen-lobby'));
+  record(
+    'app: and issues a room code',
+    /^[A-Z0-9]{4}$/.test((await page.textContent('#lobby-code')).trim()),
+    (await page.textContent('#lobby-code')).trim(),
+  );
+  record(
+    'app: the wrestler carried into the lobby',
+    (await page.textContent('#lobby-players')).includes('Roman Reigns'),
+  );
+  record('app: no errors hosting', pageErrors.length === 0, pageErrors.join('; '));
+
+  // Every module the page needs must actually resolve — a missing export
+  // anywhere in the graph stops app.js dead and unwires every button.
+  const modules = await page.evaluate(async () => {
+    const paths = ['js/app.js', 'js/ui.js', 'js/room.js', 'js/net.js', 'js/engine.js',
+                   'js/cards.js', 'js/rules/index.js', 'js/rules/wrestling.js'];
+    const broken = [];
+    for (const path of paths) {
+      try { await import(`/${path}`); } catch (err) { broken.push(`${path}: ${err.message}`); }
+    }
+    return broken;
+  });
+  record('app: every module loads', modules.length === 0, modules.join(' | '));
 
   // Mobile width must not produce a horizontal scrollbar.
   await page.setViewportSize({ width: 390, height: 780 });

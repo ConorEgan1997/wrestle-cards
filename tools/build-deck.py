@@ -23,6 +23,9 @@ penalty kinds
 """
 
 import json, os
+from PIL import Image
+
+from cards3 import CARDS as CARDS3
 
 def sec(label, n, target="choose"):
     return {"label": label, "seconds": n, "target": target}
@@ -460,40 +463,139 @@ MINI = [
 ]
 
 
-def build():
+# --------------------------------------------------------------------------
+# The cards3.1 set: a second, much larger pack of 478 cards in four types.
+#
+# It overlaps the original pack — some cards appear in both, redrawn and
+# renumbered — and that is deliberate: the table asked to keep the lot and
+# live with the duplicates. So ids are namespaced by pack rather than by
+# number, and nothing from the first pack is touched.
+#
+#   kind    where it lives            what it is
+#   mini    the draw pile             drawn one per turn
+#   event   your hand (pack 1)        the original hold-and-play cards
+#   ppv     your hand                 "drink when X happens on screen"
+#   private your hand                 one-shot powers, held all night
+#   mitb    your hand, if enabled     only meaningful on a Money in the Bank night
+# --------------------------------------------------------------------------
+
+KIND3 = {'M': 'mini', 'V': 'ppv', 'B': 'mitb', 'P': 'private'}
+PREFIX3 = {'M': 'mg', 'V': 'ppv', 'B': 'mitb', 'P': 'ppc'}
+PILE = {'mini': 'draw', 'event': 'hand', 'ppv': 'hand', 'private': 'hand', 'mitb': 'mitb'}
+
+# Cards from the first pack that are plainly one-shots. The second pack says so
+# on the card itself, but these were marked by hand before that was the rule.
+WHO = {
+    'self': 'I drink', 'left': 'Left drinks', 'right': 'Right drinks',
+    'selfright': 'Us two drink', 'all': 'Everyone drinks',
+    'others': 'Everyone else drinks', 'choose': 'They drink',
+    'many': 'They drink', 'vote': 'Most votes drinks',
+}
+
+
+# "Down your drink" has to say *whose* drink, or a card aimed at somebody else
+# reads like an instruction to the person holding it.
+DOWNS = {
+    'self': 'I down my drink', 'left': 'Left downs it', 'right': 'Right downs it',
+    'selfright': 'We both down it', 'all': 'Everyone downs it',
+    'others': 'Everyone else downs it', 'choose': 'They down their drink',
+    'many': 'They down their drinks', 'vote': 'Most votes downs it',
+}
+
+
+def outcome3(kind, seconds, target):
+    """One button, phrased for whoever it lands on."""
+    if seconds is None:
+        return [down(DOWNS[target], target)]
+    if seconds == 0:
+        # The card does something other than hand out a timed drink — pass a
+        # tag partner, create a rule, steal an answer. It still gets a button,
+        # so it can be played and announced, but the button cannot promise
+        # anything the data does not know: the rule is printed on the art.
+        return [note('Done — the card says what happens' if kind == 'mini' else 'Play it',
+                     target)]
+    return [sec(f"{WHO[target]} {seconds}s", seconds, target)]
+
+
+def measure(root, image):
+    with Image.open(os.path.join(root, image)) as im:
+        return list(im.size)
+
+
+def build(root):
     cards = []
     for n, title, text, outcomes, once in EVENT:
         cards.append({
-            "id": f"event-{n:02d}", "deck": "event", "n": n,
-            "title": title, "text": text,
+            "id": f"event-{n:02d}", "deck": "event", "kind": "event", "pile": "hand",
+            "pack": 1, "n": n, "title": title, "text": text,
             "image": f"cards/event-{n:02d}.webp",
             "once": once, "outcomes": outcomes,
         })
-    for entry in MINI:
-        n, title, text, outcomes = entry
+    for n, title, text, outcomes in MINI:
         cards.append({
-            "id": f"mini-{n:02d}", "deck": "mini", "n": n,
-            "title": title, "text": text,
+            "id": f"mini-{n:02d}", "deck": "mini", "kind": "mini", "pile": "draw",
+            "pack": 1, "n": n, "title": title, "text": text,
             "image": f"cards/mini-{n:02d}.webp",
+            "once": False,  # a drawn card is discarded anyway; declared for shape
             "outcomes": outcomes,
         })
+
+    for kind_code, n, title, seconds, target in CARDS3:
+        kind = KIND3[kind_code]
+        cards.append({
+            "id": f"{PREFIX3[kind_code]}-{n:03d}", "deck": kind, "kind": kind,
+            "pile": PILE[kind], "pack": 3, "n": n, "title": title, "text": "",
+            "image": f"cards/{PREFIX3[kind_code]}-{n:03d}.webp",
+            # Private player cards are one-shot powers by definition; the rest
+            # of pack 3 is replaced on play like everything else.
+            "once": kind == 'private',
+            "outcomes": outcome3(kind, seconds, target),
+        })
+
+    # Two cards that arrived outside the zip.
+    cards.append({
+        "id": "mg-466", "deck": "mini", "kind": "mini", "pile": "draw", "pack": 3,
+        "n": 466, "title": "Later Train",
+        "text": "Drink for 10 seconds if you got a later train than planned today.",
+        "image": "cards/mg-466.webp", "once": False,
+        "outcomes": [sec("I drink 10s", 10, "self")],
+    })
+    cards.append({
+        "id": "mg-467", "deck": "mini", "kind": "mini", "pile": "draw", "pack": 3,
+        "n": 467, "title": "JD Don't Google Me",
+        "text": "All players must show their recent internet history, or down your drink.",
+        "image": "cards/mg-467.webp", "once": False,
+        "outcomes": [
+            down("Wouldn't show it — down your drink", "many"),
+            note("Everyone showed — nobody drinks", "self"),
+        ],
+    })
+
+    # Every card carries the size of its own art: the two packs are drawn to
+    # different shapes, so the UI sizes each card rather than assuming one.
+    for card in cards:
+        card["size"] = measure(root, card["image"])
     return cards
 
 
 if __name__ == "__main__":
-    cards = build()
     here = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(here, "..", "cards", "deck.json")
-    with open(out, "w") as fh:
+    root = os.path.join(here, "..")
+    cards = build(root)
+
+    with open(os.path.join(root, "cards", "deck.json"), "w") as fh:
         json.dump(cards, fh, indent=1, ensure_ascii=False)
 
-    missing = [c["image"] for c in cards
-               if not os.path.exists(os.path.join(here, "..", c["image"]))]
-    events = [c for c in cards if c["deck"] == "event"]
-    minis = [c for c in cards if c["deck"] == "mini"]
+    ids = [c["id"] for c in cards]
+    if len(set(ids)) != len(ids):
+        raise SystemExit("DUPLICATE IDS")
+
+    by_kind = {}
+    for c in cards:
+        by_kind[c["kind"]] = by_kind.get(c["kind"], 0) + 1
+    shapes = {tuple(c["size"]) for c in cards}
+
     print(f"{len(cards)} cards -> cards/deck.json")
-    print(f"  event: {len(events)}  (one-shot: {sum(1 for c in events if c['once'])})")
-    print(f"  mini : {len(minis)}")
-    if missing:
-        raise SystemExit(f"MISSING IMAGES: {missing}")
-    print("  every card has its image")
+    for kind, count in sorted(by_kind.items()):
+        print(f"  {kind:<8} {count:>4}   ({PILE[kind]} pile)")
+    print(f"  {len(shapes)} different art shapes")

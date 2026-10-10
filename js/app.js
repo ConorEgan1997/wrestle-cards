@@ -7,11 +7,13 @@
 import { HostRoom, ClientRoom, myIdentity, rememberName } from './room.js';
 import { normaliseCode } from './net.js';
 import { DEFAULT_RULESET, loadDeck, deckLoaded, eventCardOptions } from './rules/index.js';
+import { SETTINGS_SCHEMA } from './rules/wrestling.js';
 import {
   showScreen, renderLobby, renderGame, tickCountdowns, syncClock,
   drinkBatches, batchRemaining, watchDock,
-  openSheet, closeSheet, sheetIsOpen, cardSheet, pickerSheet, tallySheet,
-  counterSheet, fillCardList,
+  openSheet, closeSheet, sheetIsOpen, pickerSheet, tallySheet,
+  counterSheet, fillCardList, renderSettings,
+  openFocus, closeFocus, focusIsOpen,
   toast, text, button,
 } from './ui.js';
 
@@ -51,7 +53,9 @@ function init() {
     if (event.target === $('sheet')) closeSheet();
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && sheetIsOpen()) closeSheet();
+    if (event.key !== 'Escape') return;
+    if (focusIsOpen()) closeFocus();
+    else if (sheetIsOpen()) closeSheet();
   });
 
   window.addEventListener('hashchange', route);
@@ -180,6 +184,7 @@ function leaveRoom(reason) {
   resultShown = false;
   finished.clear();
   closeSheet();
+  closeFocus();
   window.location.hash = '';
   showScreen('home');
 }
@@ -200,6 +205,10 @@ function onView(next) {
       code: room?.code,
       isHost: !!room?.isHost,
       canStart: !!room?.canStart(),
+    });
+    renderSettings(next, SETTINGS_SCHEMA, {
+      isHost: !!room?.isHost,
+      onChange: (patch) => room?.setSettings(patch),
     });
     return;
   }
@@ -282,21 +291,20 @@ function resolveOutcome(action) {
   );
 }
 
-/** Tapping any card opens it full size, with whatever you can do with it. */
+/** Tapping any card opens it full screen, where it can actually be read. */
 function showCard(card) {
   const actions = view.legalActions.filter(
     (a) => ((a.type === 'playEvent' || a.type === 'swapCard') && a.cardId === card.id) ||
            (a.type === 'outcome' && view.current?.card.id === card.id),
   );
-  openSheet(
-    cardSheet(card, actions, {
-      onPick: (action) => {
-        if (action.type === 'swapCard') return act(action);
-        if (action.cardId === 'event-50') return promptHouseRule(action);
-        resolveOutcome(action);
-      },
-    }),
-  );
+  openFocus(card, actions, {
+    measure: view.settings?.measure,
+    onPick: (action) => {
+      if (action.type === 'swapCard') return act(action);
+      if (action.cardId === 'event-50') return promptHouseRule(action);
+      resolveOutcome(action);
+    },
+  });
 }
 
 /** Tapping a player shows their Event Cards — they are public rules. */
@@ -329,8 +337,13 @@ function showPlayer(player) {
 
 function tallyLine(player) {
   const bits = [];
-  if (player.seconds) bits.push(`${player.seconds}s`);
+  if (player.seconds) {
+    bits.push(view.settings?.measure === 'sips'
+      ? `${Math.max(1, Math.round(player.seconds / 2))} sips`
+      : `${player.seconds}s`);
+  }
   if (player.downs) bits.push(`${player.downs} downed`);
+  if (player.shots) bits.push(`${player.shots} shots`);
   return bits.join(' · ');
 }
 
@@ -343,9 +356,13 @@ function promptGive(player) {
 
     const box = document.createElement('div');
     box.className = 'sheet-actions';
+    const sipping = view.settings?.measure === 'sips';
     for (const seconds of [3, 5, 10]) {
+      const label = sipping
+        ? `${Math.max(1, Math.round(seconds / 2))} sips`
+        : `${seconds} seconds`;
       box.append(
-        button(`${seconds} seconds`, () => {
+        button(label, () => {
           close();
           act({ type: 'give', targets: [player.id], seconds, label: 'Handed out' });
         }, 'btn btn-gold'),
@@ -387,7 +404,7 @@ function promptHouseRule(action) {
 }
 
 function promptVote(current) {
-  if (sheetIsOpen()) return;
+  if (sheetIsOpen() || focusIsOpen()) return;
   if (!current.legalActions.some((a) => a.type === 'vote')) return;
 
   openSheet(
@@ -408,11 +425,15 @@ function promptVote(current) {
  * waiting on your answer and nobody should have to hunt for a button.
  */
 function promptCounter(current) {
-  if (sheetIsOpen()) return;
+  if (sheetIsOpen() || focusIsOpen()) return;
+  // The list you complete against is the one kind of card it could be.
+  fillCardList(eventCardOptions(current.pending.kind));
   openSheet(
     counterSheet({
       byName: current.pending.byName,
       stake: current.pending.stake,
+      kind: current.pending.kind,
+      measure: current.settings?.measure,
       onGuess: (guess) => act({ type: 'guessCard', guessText: guess }),
       onAccept: () => act({ type: 'acceptCard' }),
     }),
@@ -466,8 +487,12 @@ function finalSheet(final) {
       const who = document.createElement('div');
       who.append(text('div', score.name));
       if (score.wrestler) who.append(text('div', score.wrestler, 'sub'));
-      const bits = [`${score.seconds}s`];
+      const sipping = final.settings?.measure === 'sips';
+      const bits = [sipping
+        ? `${Math.max(1, Math.round(score.seconds / 2))} sips`
+        : `${score.seconds}s`];
       if (score.downs) bits.push(`${score.downs} downed`);
+      if (score.shots) bits.push(`${score.shots} shots`);
       li.append(who, text('span', bits.join(' · '), 'amount'));
       list.append(li);
     }

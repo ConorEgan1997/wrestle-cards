@@ -6,7 +6,20 @@ their own phone. There is no server, no database and no hosting bill — the sit
 is plain HTML and JavaScript on GitHub Pages, and the phones talk to each other
 directly.
 
-124 cards: 76 Mini Games and 48 Event Cards.
+**602 cards**, from two packs merged into one deck:
+
+| Kind | Count | Where it lives |
+| --- | --- | --- |
+| Mini Game | 430 | the draw pile — one a turn |
+| Event Card | 48 | your hand |
+| PPV Action | 80 | your hand |
+| Private Player Card | 28 | your hand, one-shot powers |
+| Money in the Bank | 16 | your hand, only if the host turns it on |
+
+The first pack (124 cards) was transcribed by hand, text and all. The cards3.1
+set (478) prints its rule on the art, so those cards carry a title, a number
+and their outcome buttons, and the rule itself is read off the card — which is
+why tapping a card to read it matters more than it used to.
 
 ---
 
@@ -14,42 +27,169 @@ directly.
 
 1. **Everyone picks a wrestler** in the lobby. A lot of Event Cards key off it
    ("if your chosen wrestler is cut open, down your drink").
-2. **Each player is dealt four Event Cards.** These are face-up for the whole
-   table — they are standing rules everyone has to be able to enforce, so
-   hiding them would only cause arguments. Reactive ones like No Sell, Rope
-   Break and You Are Cursed are used once and replaced; the rest stand all
-   night.
-3. **On your turn you draw a Mini Game.** The table plays it out loud, then
-   whoever is resolving it taps the outcome that actually happened.
+2. **Each player is dealt a hand, held secret** (four cards by default), from
+   the Event, PPV and Private Player packs. Playing one uses it
+   up — it leaves your hand and is replaced from the pack, so a hand is always
+   four cards and there is always something to play.
+3. **Playing a card puts it face down.** You choose who it is aimed at
+   (the card's printed target is pre-selected, so accepting it is one tap).
+   Nobody sees which card it is — not even the person it's aimed at.
+4. **They can try to name it.** The face-down card gives away **what kind** it
+   is — Event, PPV, Private Player, Money in the Bank — and the box completes
+   against that pack only. (With 172 cards you could be holding, a blind guess
+   would be a lottery rather than a read; narrowed to one kind it is 80 at
+   worst, and knowing someone has been sitting on a PPV card all night is
+   exactly the sort of thing you *should* be able to use.)
+   Guess right and the card turns back on whoever played it: *they* take
+   the drink. Take it on the chin instead and you pay the base drink.
+   **Botch the call and your drink doubles** — so the amount at stake is shown
+   while the card is still face down, and you decide whether it's worth a go.
+5. **The card turns over.** It takes the whole screen for a few seconds on
+   every device — the art, who played it, who it hit, and who called it.
+6. **On your turn you draw a Mini Game.** The table plays it out loud, then
+   whoever drew it taps the outcome that actually happened and picks who lost.
+7. **Once a turn you can bin a card**, on your own turn, and take a fresh one
+   from the pack. It costs a three-second sip — cheap enough to be worth it for
+   a card that's never going to come up, dear enough that you can't cycle your
+   whole hand.
+8. **The clock takes over**, then the turn ends itself. Every screen switches
+   to one shared countdown; the player who dealt the drink out starts it when
+   everyone is actually looking. When it runs out the turn passes on its own
+   and the next player can draw.
 
 The app deliberately does not try to referee. It cannot know who fluffed the
 naming game, so it shows the card, offers the outcomes printed on it, and turns
 whichever one a human taps into a drink with a shared countdown.
 
+**Hands are secret**, which is a change from the first version — they were
+face-up back when Event Cards were permanent standing rules the table had to
+enforce. They're one-use plays now, and guessing a card would be no trick at
+all if everyone could see who was holding what. What *is* public is the pack:
+every Event Card's name and text, which is what the guess box completes
+against. The secret is only ever who holds which.
+
+### Tonight's rules
+
+The host sets these in the lobby and they lock when play starts. Everyone sees
+the same panel, so the table can see what it has agreed to.
+
+| Option | Choices | What it does |
+| --- | --- | --- |
+| **Drink lengths** | Mid carder · Main eventer · Champion | Rescales the common 2/3/5/10 second bands — down to 1/1/3/5, as printed, or up to 4/5/10/15 |
+| **Measured in** | Seconds · Sips | Sips drop the countdown and ask for mouthfuls instead — for spirits |
+| **Countering** | On · Off | Off means a played card resolves straight away, face up |
+| **Hardcore match** | Off · 5% · 10% · 20% | Every drink has that chance of becoming a shot |
+| **Money in the Bank** | Leave out · Shuffle in | 16 cards that only mean anything on a night with an MITB match |
+| **Cards in hand** | 3 · 4 · 5 | Fewer makes each card matter; more makes countering easier |
+
+Two things worth knowing about how these work:
+
+- **Drink lengths only move the common bands.** Of the 590 timed outcomes in
+  the merged deck, 315 are three seconds, 120 are five, 71 are two and 8 are
+  ten — 87% of the game sits on those four numbers, so rescaling them is
+  enough. (The two-second band is almost entirely the second pack, which is
+  why it was added when the packs were merged.) A card that prints its own
+  number keeps it: the 28-second WrestleMania forfeit, the 30-second Royal
+  Rumble, "8 seconds in the name of an 8-hour shift". Rescaling those would
+  break the joke.
+- **Hardcore is sized off a real night.** Simulating forty 4-player nights
+  gives about 74 drinks, roughly 19 each. So 5% is about four shots across the
+  table — frequent enough to be a threat, rare enough to stay funny. 20% is
+  about one in five and is there for the ambitious.
+
+The schema in `js/rules/wrestling.js` is data, and the lobby renders itself
+from it — a new option is one entry there plus wherever it's read. The engine
+refuses any key it doesn't know and any value not on the list, so a client
+can't invent an option or set a real one to something the rules have never
+seen.
+
 ### What it does handle
 
-- **Drink timers.** Tap to start; everyone's screen shows the same countdown,
-  corrected for clock drift between devices.
+- **Drink timers.** One countdown for the whole room, corrected for clock drift
+  between devices. A play that puts three people on the clock is one timer, not
+  three. The person who dealt it out runs it; the drinkers and the host can too,
+  so a dead phone never leaves the table waiting.
 - **Left and right.** Cards that say "the person to your right" resolve from
   the seating order — nobody has to pick from a list. Seating is the order
   people joined, which the lobby shows, so agree which way round it goes before
   anyone is drunk.
 - **Pick-a-player.** Cards that say "pick any player" open a list of names.
+  Mini Game outcomes that name a seat ("the person to your right") are worked
+  out from the seating and can't be redirected — that one isn't negotiable.
 - **The doublers.** Botchamania doubles that player's drinks for five real
   minutes, automatically. Title Match Penalty doubles them whenever the host
   flags a title match (More → Title match on).
 - **You Are Cursed.** The cursed player takes the next three punishments meant
   for anyone else.
 - **Taboo Tuesday** runs an actual vote.
-- **The tally.** Seconds drunk and drinks downed per player, so "the worst
-  performer of the game so far" has an answer.
+- **Countering.** The guess box matches loosely, so "no sell" finds NO SELL!.
+  One correct call from any of the targets is enough — and it saves everyone,
+  including anyone who already guessed wrong. A card aimed only at yourself
+  skips the whole exchange, and whoever played it (or the host) can force it
+  over if someone has put their phone down mid-guess.
+- **The stake.** Everyone can see what's riding on a face-down card, because
+  weighing it up is the decision. It gives away the size of the drink but not
+  the card: three seconds is the most common drink in the pack by a distance,
+  so on its own it narrows nothing down. A botched call doubles a timed drink; you can't down a
+  can twice, so on a "down your drink" card the botch is recorded and costs
+  nothing extra.
+- **The tally.** Seconds drunk, drinks downed and shots taken per player, so
+  "the worst performer of the game so far" has an answer. The engine always
+  records seconds, even in sips mode, so the numbers stay comparable between
+  nights however the table was measuring.
 
-### The missing cards
+### What's in and what isn't
 
-Event Cards 5, 6, 7 and 8 are not in here — that sheet wasn't in the zip. Send
-it over and they drop in with one command (see *Adding or fixing cards*).
+The first pack's Event Cards run 1–52 and **48 of them are here**: the sheet
+carrying 5, 6, 7 and 8 was never supplied. Its Mini Games are a complete 1–76.
+
+The cards3.1 set is all here, both halves of the split zip, plus two that
+arrived outside it: **466 Later Train** (built from the photo) and **467 JD
+Don't Google Me** (new — "all players must show their recent internet history,
+or down your drink", with artwork drawn for it rather than lifted).
+
+Two things to know about the merge:
+
+- **Duplicates were kept on purpose.** Several cards appear in both packs,
+  redrawn and renumbered, and a few titles repeat outright — "Heel Turn" is
+  printed on four different cards. Ids are namespaced by pack
+  (`event-24`, `mg-291`) so nothing collides, and the counter is judged on the
+  **name**: naming "Heel Turn" counters any Heel Turn, because a player saying
+  it out loud can't mean one rather than another.
+- **Card 291 was already called "JD Don't Google Me"**, with a different rule
+  (a three-second drink). It's still in. The new one is 467.
 
 ---
+
+### Reading the cards
+
+Tap any card — in your hand, on the table, anyone's — and it fills the screen.
+The art is only ~380px wide at source with the rules printed small on it, so at
+hand size it's something you recognise rather than something you read. The full
+screen view gives the art the whole display and sets the same words as real
+text underneath at a size that works across a dim room, with whatever you can
+do with the card docked at the bottom. For the second pack there are no words
+to set underneath — the rule is on the art — so for those cards the full screen
+view *is* how you read them.
+
+**The two packs are drawn to different shapes.** Pack 1 is a long 380×1020;
+the PPV, Private Player and Money in the Bank cards are much squatter, around
+400×728, and a couple are shapes of their own again. Every card carries the
+size of its own art and sizes its own frame from it — one fixed ratio cropped
+the bottom off the squat ones, which on those cards is most of the rule.
+
+### Built for a phone
+
+The layout is mobile-first in the literal sense: the phone rules are the
+stylesheet's base case and `@media (min-width: 720px)` only relaxes them. Two
+rules drive it — anything you have to tap lives in the bottom third of the
+screen, and nothing important needs a scroll to notice.
+
+In practice that means a dock pinned to the bottom holding the outcome buttons
+and your hand, with the table scrolling above it. Your cards show cropped to
+their number and title so four fit across a phone; tap one to see it full size.
+There's a test that fails if a button ever ends up behind the hand, because it
+did once on a 667px-tall screen.
 
 ## Running it locally
 
@@ -135,8 +275,11 @@ js/engine.js              the generic engine — decks, hands, turns, redaction
 js/cards.js               card helpers (used by the engine's test fixture)
 js/rules/wrestling.js     this game's rules
 js/rules/index.js         the ruleset registry
-cards/deck.json           all 124 cards: text and outcomes
+cards/deck.json           all 602 cards: kind, pile, art size, outcomes
 cards/*.webp              the card art, one file per card
+tools/split-sheets.py     cuts the original 4-up sheets into single cards
+tools/cards3.py           the cards3.1 catalogue: 476 titles, times and targets
+tools/verify-cards.py     checks every image shows the card its name claims
 tools/build-deck.py       rebuilds deck.json from the transcribed card text
 tools/dev-server.mjs      zero-dependency static server
 tests/                    unit, protocol, deck and browser tests
@@ -151,9 +294,10 @@ engine's regression fixture.
 
 ## Adding or fixing cards
 
-The card art lives in `cards/` as `event-NN.webp` and `mini-NN.webp`. The text
-and the outcome buttons live in `tools/build-deck.py`, which generates
-`cards/deck.json`:
+The card art lives in `cards/`, named by pack and kind: `event-NN` and
+`mini-NN` for the first pack, `mg-NNN` (Mini Game), `ppv-NNN`, `ppc-NNN`
+(Private Player Card) and `mitb-NNN` for the second. The text and the outcome
+buttons live in `tools/build-deck.py`, which generates `cards/deck.json`:
 
 ```bash
 python3 tools/build-deck.py
@@ -189,18 +333,42 @@ becomes a button.
 
 ### Splitting new sheets
 
-The originals came as sheets of four cards at 1536×1024. `tools/build-deck.py`
-documents the format; the sheets split on exact 384px boundaries. If you send
-more, say which deck and which numbers each sheet covers and they go in the
-same way.
+The originals came as sheets of four at 1536×1024, splitting on exact 384px
+boundaries:
+
+```bash
+python3 tools/split-sheets.py ~/path/to/sheets   # cut them up
+python3 tools/verify-cards.py                    # check the art matches the names
+python3 tools/build-deck.py                      # regenerate deck.json
+```
+
+The one piece of hand-entered data is the `SHEETS` table in `split-sheets.py` —
+which deck each sheet belongs to and what number it starts at. Get an entry
+wrong and you get cards with the wrong art, which nothing else notices: the
+data is right, the files are right, the pictures inside them are wrong.
+
+That happened: two sheets were transposed, and four Event Cards spent a version
+wearing Mini Game art. `verify-cards.py` exists because of it, and it reads the
+two packs differently:
+
+- **Pack 1** by colour — Mini Games have a red banner, Event Cards a gold one.
+- **Pack 2** by shape. Every kind is gold there, but the banner spells out what
+  it is (MINI GAME, PPV ACTION, PRIVATE PLAYER CARD, MONEY IN THE BANK). OCR
+  makes a mess of stylised text on a textured banner, so instead each kind's
+  banner is averaged into a single small picture and every card is matched
+  against the four of them. All 478 land on their own kind, and a card cut from
+  the wrong sheet would not.
+
+Run it after any change to the sheets.
 
 ---
 
 ## Tests
 
 ```bash
-npm test              # 64 unit, protocol and deck tests
-npm run test:browser  # 32 checks in a real browser (needs playwright)
+npm test              # 117 unit, protocol and deck tests
+npm run test:browser  # 75 checks in a real browser (needs playwright)
+npm run verify:cards  # every image shows the card its filename claims
 ```
 
 `tests/harness.html` plays a three-player night in a single tab over the
@@ -209,9 +377,22 @@ of `index.html` at load time, so it can't drift from the app. Open
 `/tests/harness.html` in a browser to see the table without needing three
 phones; `?turns=N` plays that many.
 
-The fuzz test in `tests/wrestling.test.mjs` plays 100 random nights and checks
-the invariants that matter: a hand only ever holds Event Cards, no card is
-duplicated, and settled drinks don't pile up.
+The fuzz test in `tests/wrestling.test.mjs` plays 100 random nights — guessing
+at every third card — and checks the invariants that matter: a hand only ever
+holds cards from the hand piles, no card is duplicated, and settled drinks
+don't pile up.
+
+Two browser checks exist because of one embarrassing failure: "Start a table"
+once did nothing at all, because `js/app.js` imported something
+`js/rules/index.js` didn't export yet, so the module never loaded and *no*
+button on the page was wired up. Nothing caught it because nothing had ever
+clicked the button. Now the suite stubs PeerJS, clicks all the way through to a
+room code, and separately imports every module to check the graph resolves.
+
+Two more are there specifically to stop hidden information leaking: one
+scans a serialised view for any card in somebody else's hand, and the browser
+test checks the face-down card's image never appears anywhere in the page while
+it is still face down.
 
 ---
 
@@ -222,3 +403,11 @@ duplicated, and settled drinks don't pile up.
 - **Spectators** and **host migration.**
 - **Card 50's house rule** is recorded and shown to everyone, but the app can't
   enforce it — that one's on you.
+- **Event Cards 5-8.** Still missing; send the sheet and they drop in.
+- **The second pack's special cards aren't special yet.** The first pack has a
+  handful the app actually understands — Botchamania's five minutes, You Are
+  Cursed, the title-match doubler. The cards3.1 set almost certainly has its
+  own equivalents, but since its rules are printed on the art rather than in
+  the data, the app can't see them: those cards hand out their drink and the
+  rest is down to the table. Tell me which ones should do something and they
+  can be wired up by id.

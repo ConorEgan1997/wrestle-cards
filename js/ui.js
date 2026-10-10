@@ -31,6 +31,42 @@ export function showScreen(name) {
  * Cards
  * ------------------------------------------------------------------ */
 
+/*
+ * The five kinds of card, in the words printed on them. Pack 1 had two; the
+ * cards3.1 set added three more, and the difference matters to a player —
+ * a PPV Card is a standing trigger you keep, a Private Player Card is a
+ * one-shot power, a Money in the Bank card only means anything on MITB night.
+ */
+const KIND_LABEL = {
+  event: 'Event Card',
+  mini: 'Mini Game',
+  ppv: 'PPV Card',
+  private: 'Private Player Card',
+  mitb: 'Money in the Bank',
+};
+
+export function kindLabel(kind) {
+  return KIND_LABEL[kind] ?? 'Card';
+}
+
+/**
+ * The art is not one shape any more.
+ *
+ * Pack 1 is drawn 380x1020 — a long, narrow card. The cards3.1 set is mostly
+ * the same, but its PPV, Private and Money in the Bank cards are drawn much
+ * squatter (around 400x728), and two cards are their own shapes again. Letting
+ * one ratio stand for all of them cropped the bottom off the rule box, which
+ * on a squat card is most of the card. So every card carries the size of its
+ * own art and sizes its own frame from it.
+ */
+function applyShape(el, card) {
+  const [w, h] = Array.isArray(card.size) && card.size.length === 2 ? card.size : [380, 1020];
+  el.style.setProperty('--card-ratio', `${w} / ${h}`);
+  // The same number, as a plain ratio, for the places that work out a width
+  // from the height left on screen rather than the other way round.
+  el.style.setProperty('--card-ar', String(w / h));
+}
+
 export function renderCard(card, { big = false, onClick } = {}) {
   const el = document.createElement(onClick ? 'button' : 'div');
   el.className = `card${big ? ' card-big' : ''}`;
@@ -38,15 +74,16 @@ export function renderCard(card, { big = false, onClick } = {}) {
     el.type = 'button';
     el.addEventListener('click', () => onClick(card));
   }
+  applyShape(el, card);
 
   const img = document.createElement('img');
   img.src = card.image;
-  img.alt = `${card.deck === 'event' ? 'Event Card' : 'Mini Game'} ${card.n}: ${card.title}`;
+  img.alt = `${kindLabel(card.kind)} ${card.n}: ${card.title}`;
   img.loading = 'lazy';
   img.decoding = 'async';
   el.append(img);
 
-  el.title = `${card.title} — ${card.text}`;
+  el.title = card.text ? `${card.title} — ${card.text}` : card.title;
   return el;
 }
 
@@ -96,6 +133,42 @@ export function renderLobby(view, { code, isHost, canStart }) {
         : 'Everyone is ready.'
       : 'The night starts once everyone has marked themselves ready.'
     : 'Waiting for the host to start.';
+}
+
+/**
+ * Tonight's rules, rendered from the schema so adding an option needs no work
+ * here. The host taps to change them; everyone else sees the same panel with
+ * the buttons inert, so the table can see what it has agreed to.
+ */
+export function renderSettings(view, schema, { isHost, onChange }) {
+  const slot = document.getElementById('settings');
+  if (!slot) return;
+  const settings = view.settings ?? {};
+
+  slot.replaceChildren(
+    ...Object.entries(schema).map(([key, option]) => {
+      const row = document.createElement('div');
+      row.className = 'setting';
+      row.append(text('div', option.label, 'setting-label'));
+
+      const choices = document.createElement('div');
+      choices.className = 'setting-choices';
+      for (const choice of option.choices) {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'choice';
+        el.classList.toggle('is-on', settings[key] === choice.value);
+        el.disabled = !isHost;
+        el.append(text('span', choice.label, 'c-label'));
+        if (choice.detail) el.append(text('span', choice.detail, 'c-detail'));
+        if (isHost) el.addEventListener('click', () => onChange({ [key]: choice.value }));
+        choices.append(el);
+      }
+      row.append(choices);
+      if (option.note && isHost) row.append(text('div', option.note, 'setting-note'));
+      return row;
+    }),
+  );
 }
 
 function tag(text, className) {
@@ -168,6 +241,7 @@ export function renderAnnounce(view) {
   const img = document.createElement('img');
   img.src = play.card.image;
   img.alt = play.card.title;
+  applyShape(img, play.card);
   el.append(img);
 
   const body = document.createElement('div');
@@ -204,6 +278,7 @@ function renderFlash(play, age) {
   const art = document.getElementById('flash-art');
   art.src = play.card.image;
   art.alt = play.card.title;
+  applyShape(art, play.card);
   document.getElementById('flash-who').textContent = `${play.by} played`;
   document.getElementById('flash-card').textContent = play.card.title;
 
@@ -224,17 +299,22 @@ function renderFlash(play, age) {
 }
 
 /** "3 seconds" / "your whole drink" — what is riding on a face-down card. */
-export function stakeText(stake) {
+export function stakeText(stake, measure = 'seconds') {
   if (!stake) return 'something';
   if (stake.down) return 'your whole drink';
   if (stake.stopwatch) return 'a timed drink';
+  if (measure === 'sips') {
+    const n = sips(stake.seconds);
+    return `${n} sip${n === 1 ? '' : 's'}`;
+  }
   return `${stake.seconds} second${stake.seconds === 1 ? '' : 's'}`;
 }
 
 /** What a wrong call turns that into. */
-export function botchText(stake) {
+export function botchText(stake, measure = 'seconds') {
   if (!stake || stake.down || stake.stopwatch || !stake.seconds) return null;
-  return `${stake.seconds * (stake.botchMultiplier ?? 2)} seconds`;
+  const doubled = stake.seconds * (stake.botchMultiplier ?? 2);
+  return measure === 'sips' ? `${sips(doubled)} sips` : `${doubled} seconds`;
 }
 
 /** A card is face down on the table and the game is waiting on somebody. */
@@ -261,13 +341,14 @@ function renderPending(view) {
     text('b', pending.byName),
     document.createTextNode(` played a card face down at ${names(pending.targets)}`),
   );
-  const botched = botchText(pending.stake);
+  const measure = view.settings?.measure;
+  const botched = botchText(pending.stake, measure);
   body.append(
     text('span',
       pending.youCanCounter
-        ? `${stakeText(pending.stake)} at stake${botched ? ` — a wrong call makes it ${botched}` : ''}`
+        ? `${stakeText(pending.stake, measure)} at stake${botched ? ` — a wrong call makes it ${botched}` : ''}`
         : pending.waitingOn.length
-          ? `${stakeText(pending.stake)} at stake · waiting on ${names(pending.waitingOn)}…`
+          ? `${stakeText(pending.stake, measure)} at stake · waiting on ${names(pending.waitingOn)}…`
           : 'Turning it over…',
       'sub'),
   );
@@ -342,21 +423,30 @@ function renderTimer(view, { onAct }) {
     .filter((n, i, all) => all.indexOf(n) === i);
   const everyone = names.length >= view.players.length && view.players.length > 1;
 
-  $('timer-why').textContent = orders[0].label;
+  const order = orders[0];
+  const measure = view.settings?.measure;
+  const plural = names.length > 1 || everyone;
+
+  $('timer-why').textContent = order.label;
   $('timer-who').textContent = everyone ? 'Everyone' : names.join(' & ');
-  $('timer-what').textContent = orders[0].down
-    ? 'down your drink'
-    : orders[0].stopwatch
-      ? 'on the clock'
-      : `${names.length > 1 || everyone ? 'drink' : 'drinks'} for ${batchSeconds(orders)} seconds`;
+  $('timer-what').textContent = order.shot
+    ? 'hardcore match — take a shot'
+    : order.down ? 'down your drink'
+      : order.stopwatch ? 'on the clock'
+        : measure === 'sips'
+          ? `${plural ? 'take' : 'takes'} ${sips(batchSeconds(orders))} sips`
+          : `${plural ? 'drink' : 'drinks'} for ${batchSeconds(orders)} seconds`;
 
   const count = $('timer-count');
   count.dataset.batch = String(batch);
-  count.hidden = !!orders[0].down;
-  if (!batchStartedAt(orders)) {
-    count.textContent = orders[0].stopwatch ? '0.0' : String(batchSeconds(orders));
+  // A shot, a downed can and a count of sips are all "do it and say when" —
+  // only a timed drink gets a countdown.
+  count.hidden = !!order.down || !!order.shot || measure === 'sips';
+  if (!count.hidden && !batchStartedAt(orders)) {
+    count.textContent = order.stopwatch ? '0.0' : String(batchSeconds(orders));
     count.classList.remove('is-up');
   }
+  $('timer-inner')?.classList.toggle('is-shot', !!order.shot);
 
   // Only the player who dealt it out (plus the drinkers and the host) gets the
   // button; everyone else is told who they're waiting on.
@@ -372,11 +462,16 @@ function renderTimer(view, { onAct }) {
     return;
   }
 
+  const immediate = order.down || order.shot || measure === 'sips';
   const label = action.type === 'startBatch'
-    ? (orders[0].down ? 'Down it' : 'Start')
-    : (orders[0].stopwatch ? 'Stop' : 'Done');
+    ? (immediate ? 'Done' : 'Start')
+    : (order.stopwatch ? 'Stop' : 'Done');
   $('timer-actions').replaceChildren(
-    button(label, () => onAct({ type: action.type, batch }), 'btn btn-light'),
+    button(label, () => {
+      onAct({ type: action.type, batch });
+      // Nothing to time, so the one tap both starts and settles it.
+      if (immediate && action.type === 'startBatch') onAct({ type: 'finishBatch', batch });
+    }, 'btn btn-light'),
   );
 }
 
@@ -390,17 +485,18 @@ function renderDrinks(view) {
         .join(', ');
       const el = document.createElement('div');
       el.className = 'drink is-theirs';
-      el.append(text('div', `${who} — ${drinkHeadline(orders[0])}`, 'drink-who'));
+      el.append(text('div', `${who} — ${drinkHeadline(orders[0], view.settings?.measure)}`, 'drink-who'));
       el.append(text('div', orders[0].label, 'drink-why'));
       return el;
     }),
   );
 }
 
-function drinkHeadline(order) {
+function drinkHeadline(order, measure) {
+  if (order.shot) return 'a shot';
   if (order.down) return 'down your drink';
   if (order.stopwatch) return 'on the clock';
-  return `${order.seconds}s`;
+  return measure === 'sips' ? `${sips(order.seconds)} sips` : `${order.seconds}s`;
 }
 
 /**
@@ -451,7 +547,14 @@ function renderTable(view, handlers) {
   area.replaceChildren(
     renderCard(current.card, { big: true, onClick: () => handlers.onShowCard(current.card) }),
     text('div', current.card.title, 'card-title'),
-    text('p', current.card.text, 'card-text'),
+  );
+  // Only pack 1 was transcribed; the cards3.1 set prints its rule on the art,
+  // so there is nothing to set under the card and the tap-to-read prompt goes
+  // there instead of an empty paragraph.
+  area.append(
+    current.card.text
+      ? text('p', current.card.text, 'card-text')
+      : text('p', 'Tap the card to read it', 'card-text card-text-hint'),
   );
 
   if (!view.legalActions.some((a) => a.type === 'outcome')) {
@@ -471,7 +574,8 @@ function renderDockActions(view, handlers) {
   if (view.current && outcomes.length) {
     dock.replaceChildren(
       ...outcomes.map((action) =>
-        button(action.label, () => handlers.onOutcome(action), 'btn btn-gold'),
+        button(relabel(action, view.settings?.measure),
+          () => handlers.onOutcome(action), 'btn btn-gold'),
       ),
       button('Next player', () => handlers.onAct({ type: 'endTurn' })),
     );
@@ -515,7 +619,9 @@ function renderPlayers(view, handlers) {
 
       el.append(text('span', player.name + (player.id === view.you?.id ? ' (you)' : ''), 'n'));
       if (player.wrestler) el.append(text('span', player.wrestler, 'w'));
-      el.append(text('span', `${player.handCount ?? 0} cards · ${tallyText(player)}`, 's'));
+      el.append(
+        text('span', `${player.handCount ?? 0} cards · ${tallyText(player, view.settings?.measure)}`, 's'),
+      );
 
       const badges = document.createElement('div');
       badges.className = 'badges';
@@ -529,10 +635,13 @@ function renderPlayers(view, handlers) {
   );
 }
 
-export function tallyText(player) {
+export function tallyText(player, measure = 'seconds') {
   const bits = [];
-  if (player.seconds) bits.push(`${player.seconds}s`);
+  if (player.seconds) {
+    bits.push(measure === 'sips' ? `${sips(player.seconds)} sips` : `${player.seconds}s`);
+  }
   if (player.downs) bits.push(`${player.downs} down${player.downs === 1 ? '' : 's'}`);
+  if (player.shots) bits.push(`${player.shots} shot${player.shots === 1 ? '' : 's'}`);
   return bits.join(' · ') || 'clean sheet';
 }
 
@@ -572,37 +681,63 @@ export function sheetIsOpen() {
   return !$('sheet').hidden;
 }
 
-/** A card, its printed text, and whatever the holder may do with it. */
-export function cardSheet(card, actions, { onPick } = {}) {
-  return (root, close) => {
-    root.append(text('h2', card.title, 'sheet-title'));
-    root.append(
-      text('p', `${card.deck === 'event' ? 'Event Card' : 'Mini Game'} ${card.n}`, 'sheet-text'),
-    );
+/**
+ * A card, full screen and readable.
+ *
+ * The art is 380px wide at source with the rules printed small on it, so at
+ * hand size it is something you recognise, not something you read. Tapping any
+ * card lands here: art as big as the screen allows, the same words set as real
+ * text underneath, and whatever you can do with it docked at the bottom.
+ */
+export function openFocus(card, actions = [], { onPick, measure = 'seconds' } = {}) {
+  const box = document.getElementById('focus');
+  if (!box) return;
 
-    const holder = document.createElement('div');
-    holder.className = 'sheet-card';
-    holder.append(renderCard(card, { big: true }));
-    root.append(holder);
+  document.getElementById('focus-art').src = card.image;
+  document.getElementById('focus-art').alt = card.title;
+  document.getElementById('focus-kind').textContent = `${kindLabel(card.kind)} ${card.n}`;
+  document.getElementById('focus-title').textContent = card.title;
+  const body = document.getElementById('focus-text');
+  body.textContent = card.text || '';
+  body.hidden = !card.text;
 
-    root.append(text('p', card.text, 'sheet-text'));
+  document.getElementById('focus-actions').replaceChildren(
+    ...actions.map((action) => {
+      // Playing a card is the headline; binning it is the quiet option.
+      const style = action.type === 'swapCard' ? 'btn' : 'btn btn-gold';
+      return button(relabel(action, measure), () => {
+        closeFocus();
+        onPick?.(action);
+      }, style);
+    }),
+  );
 
-    if (actions.length) {
-      const box = document.createElement('div');
-      box.className = 'sheet-actions';
-      for (const action of actions) {
-        // Playing a card is the headline; binning it is the quiet option.
-        const style = action.type === 'swapCard' ? 'btn' : 'btn btn-gold';
-        box.append(
-          button(action.label, () => {
-            close();
-            onPick?.(action);
-          }, style),
-        );
-      }
-      root.append(box);
-    }
-  };
+  // The view wires its own close button rather than relying on the caller,
+  // so it behaves the same everywhere it is opened from.
+  const close = document.getElementById('focus-close');
+  if (close) close.onclick = closeFocus;
+
+  box.hidden = false;
+  box.querySelector('.focus-scroll').scrollTop = 0;
+}
+
+export function closeFocus() {
+  const box = document.getElementById('focus');
+  if (box) box.hidden = true;
+}
+
+export function focusIsOpen() {
+  return !document.getElementById('focus')?.hidden;
+}
+
+/** "drinks 5s" reads as "drinks 3 sips" when the table is on spirits. */
+export function relabel(action, measure) {
+  if (measure !== 'sips') return action.label;
+  return String(action.label).replace(/(\d+)\s*s\b/g, (_, n) => `${sips(Number(n))} sips`);
+}
+
+export function sips(seconds) {
+  return Math.max(1, Math.round((seconds || 0) / 2));
 }
 
 /**
@@ -664,19 +799,29 @@ export function pickerSheet(
  * public, only the holder's hand is secret — so this is a memory game, not a
  * lucky dip. A blank guess just takes it.
  */
-export function counterSheet({ byName, stake, onGuess, onAccept }) {
+export function counterSheet({ byName, stake, kind, measure = 'seconds', onGuess, onAccept }) {
   return (root, close) => {
     root.append(text('h2', 'Name the card', 'sheet-title'));
+    /*
+     * The type of the card is given away on purpose. There are 156 cards you
+     * can be holding (172 on a Money in the Bank night) and a blind guess
+     * against that many is a lottery, not a read — so the counter is narrowed
+     * to one kind, which is what makes it a judgement about the player rather
+     * than luck.
+     */
     root.append(
-      text('p', `${byName} played something at you. Name it and it lands on them instead.`,
+      text('p',
+        kind
+          ? `${byName} played a ${kindLabel(kind)} at you. Name it and it lands on them instead.`
+          : `${byName} played something at you. Name it and it lands on them instead.`,
         'sheet-text'),
     );
 
     // The whole point of the risk is being able to weigh it up before you try.
-    const botched = botchText(stake);
+    const botched = botchText(stake, measure);
     const odds = document.createElement('div');
     odds.className = 'stake';
-    odds.append(text('div', stakeText(stake), 'stake-amount'));
+    odds.append(text('div', stakeText(stake, measure), 'stake-amount'));
     odds.append(
       text('div',
         botched ? `at stake — botch it and you drink ${botched}` : 'at stake',
@@ -705,7 +850,7 @@ export function counterSheet({ byName, stake, onGuess, onAccept }) {
     });
 
     box.append(button('Call it', send, 'btn btn-gold'));
-    box.append(button(`Just take it (${stakeText(stake)})`, () => {
+    box.append(button(`Just take it (${stakeText(stake, measure)})`, () => {
       close();
       onAccept();
     }));
@@ -743,7 +888,7 @@ export function tallySheet(view) {
       const who = document.createElement('div');
       who.append(text('div', player.name));
       if (player.wrestler) who.append(text('div', player.wrestler, 'sub'));
-      li.append(who, text('span', tallyText(player), 'amount'));
+      li.append(who, text('span', tallyText(player, view.settings?.measure), 'amount'));
       list.append(li);
     }
     root.append(list);

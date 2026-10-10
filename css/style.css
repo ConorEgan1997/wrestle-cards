@@ -650,6 +650,170 @@ input::placeholder {
   font-weight: 700;
 }
 
+/* ----------------------- a card, full screen ----------------------- */
+
+/*
+ * Tap any card and it fills the screen. The source art is only 380px wide
+ * and the rules are printed small on it, so at hand size it is a thumbnail
+ * you recognise rather than something you can read. This is where you
+ * actually read it — art as large as the display allows, and the same words
+ * set as real text underneath for anyone who would rather not squint.
+ */
+.focus {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0c;
+}
+
+.focus-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px var(--gutter) 16px;
+  text-align: center;
+}
+
+.focus-close {
+  position: sticky;
+  top: 0;
+  float: right;
+  width: 44px;
+  height: 44px;
+  font-size: 1.8rem;
+  line-height: 1;
+  background: rgb(0 0 0 / 0.55);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.focus-art {
+  display: block;
+  width: 100%;
+  max-width: min(380px, 92vw);
+  margin: 0 auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.6);
+}
+
+.focus-body {
+  max-width: 420px;
+  margin: 16px auto 0;
+  text-align: left;
+}
+
+.focus-kind {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.focus-title {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  margin: 2px 0 8px;
+}
+
+.focus-text {
+  margin: 0;
+  /* Bigger than the body text elsewhere: this is the one place the rules
+     actually have to be read, often across a dim room. */
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.focus-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px var(--gutter) calc(10px + var(--safe-b));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.focus-actions:empty {
+  display: none;
+}
+
+/* ------------------------- lobby options --------------------------- */
+
+.setting {
+  margin-bottom: 14px;
+}
+
+.setting-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.setting-choices {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.choice {
+  flex: 1 1 auto;
+  min-width: 84px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.choice[disabled] {
+  cursor: default;
+  opacity: 1;
+}
+
+.choice.is-on {
+  border-color: var(--gold);
+  background: #2a2313;
+  box-shadow: inset 0 0 0 1px var(--gold);
+}
+
+.choice .c-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.choice .c-detail {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.setting-note {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
 /* --------------------------- the stake ----------------------------- */
 
 .stake {
@@ -833,6 +997,13 @@ input::placeholder {
   text-align: center;
 }
 
+.card-text-hint {
+  /* The cards3.1 set prints its rule on the art rather than in the data, so
+     there is nothing to set here — this points at the card instead. */
+  font-style: italic;
+  opacity: 0.75;
+}
+
 .card-text {
   text-align: center;
   color: var(--ink-soft);
@@ -886,7 +1057,7 @@ input::placeholder {
    * hand, and gives the card whatever remains. svh, so an address bar sliding
    * in doesn't push the buttons under the thumb strip.
    */
-  --card-w: max(96px, min(230px, 62vw, calc((100svh - var(--dock-h) - 300px) * 0.3725)));
+  --card-w: max(96px, min(230px, 62vw, calc((100svh - var(--dock-h) - 300px) * var(--card-ar, 0.3725))));
   cursor: default;
 }
 
