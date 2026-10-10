@@ -43,6 +43,17 @@
           <button class="btn" type="submit" id="btn-join">Join</button>
         </form>
 
+        <label class="check">
+          <input type="checkbox" id="input-join-screen" />
+          <span>
+            <strong>I'm the big screen</strong>
+            <small class="note">
+              Join a table as the telly rather than a player — shows the game
+              to the room and can move it on, but is dealt no cards.
+            </small>
+          </span>
+        </label>
+
         <div class="divider"><span>or</span></div>
 
         <button class="btn" id="btn-local">Play on this screen</button>
@@ -101,6 +112,17 @@
         <label class="field lobby-wrestler">
           <span>Your wrestler</span>
           <input id="input-wrestler-lobby" type="text" maxlength="40" placeholder="Who are you backing?" />
+        </label>
+
+        <label class="check" id="hub-toggle" hidden>
+          <input type="checkbox" id="input-hub" />
+          <span>
+            <strong>Use this screen as the hub</strong>
+            <small class="note">
+              This device becomes the table: it deals, shows the cards and runs
+              the clock for the room. It won't be dealt a hand or take a turn.
+            </small>
+          </span>
         </label>
 
         <h2 class="section-title">Tonight's rules</h2>
@@ -193,9 +215,13 @@
     <div class="flash" id="flash" hidden>
       <div class="flash-inner">
         <img id="flash-art" alt="" />
-        <div class="flash-who" id="flash-who"></div>
-        <div class="flash-card" id="flash-card"></div>
-        <div class="flash-result" id="flash-result"></div>
+        <!-- Wrapped so the hub can set the words beside the card instead of
+             under it; on a phone this div is just a pass-through. -->
+        <div class="flash-body">
+          <div class="flash-who" id="flash-who"></div>
+          <div class="flash-card" id="flash-card"></div>
+          <div class="flash-result" id="flash-result"></div>
+        </div>
       </div>
     </div>
 

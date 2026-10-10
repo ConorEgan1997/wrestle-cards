@@ -106,12 +106,17 @@ export function renderLobby(view, { code, isHost, canStart }) {
       name.textContent = player.name + (player.id === view.you?.id ? ' (you)' : '');
       const wrestler = document.createElement('span');
       wrestler.className = 'wrestler';
-      wrestler.textContent = player.wrestler || 'no wrestler picked';
+      wrestler.textContent = player.screen
+        ? 'showing the game to the room'
+        : (player.wrestler || 'no wrestler picked');
       who.append(name, wrestler);
       li.append(who);
 
       if (player.isHost) li.append(tag('Host', 'tag-host'));
-      li.append(tag(player.ready ? 'Ready' : 'Waiting', player.ready ? 'tag-ready' : ''));
+      // A screen is never waiting on anything, so a ready tag on it would
+      // just be a tick nobody pressed.
+      if (player.screen) li.append(tag('Big screen', 'tag-screen'));
+      else li.append(tag(player.ready ? 'Ready' : 'Waiting', player.ready ? 'tag-ready' : ''));
       return li;
     }),
   );
@@ -125,7 +130,7 @@ export function renderLobby(view, { code, isHost, canStart }) {
   startBtn.hidden = !isHost;
   startBtn.disabled = !canStart;
 
-  const missing = view.players.filter((p) => !p.wrestler).length;
+  const missing = view.players.filter((p) => !p.wrestler && !p.screen).length;
   $('lobby-hint').textContent = isHost
     ? canStart
       ? missing
@@ -281,21 +286,32 @@ function renderSeatActions(view, handlers) {
   const outcomes = actions.filter((a) => a.type === 'outcome');
   const shown = outcomes.length
     ? outcomes
-    : actions.filter((a) => ['draw', 'endTurn', 'unstick'].includes(a.type));
+    : actions.filter((a) => ['draw', 'endTurn'].includes(a.type));
 
-  if (!seat || !shown.length) {
-    dock.replaceChildren();
-    return;
+  const row = [];
+  if (seat && shown.length) {
+    row.push(
+      text('div', `${seat.name} —`, 'seat-turn'),
+      ...shown.map((action) => button(
+        relabel(action, measure),
+        () => handlers.onSeatAct(seat.id, action),
+        action.type === 'draw' ? 'btn btn-gold btn-big' : 'btn btn-big',
+      )),
+    );
   }
 
-  dock.replaceChildren(
-    text('div', `${seat.name} —`, 'seat-turn'),
-    ...shown.map((action) => button(
-      relabel(action, measure),
-      () => handlers.onSeatAct(seat.id, action),
-      action.type === 'draw' ? 'btn btn-gold btn-big' : 'btn btn-big',
-    )),
-  );
+  /*
+   * The screen's own way out, always last and always quieter than the thing
+   * the table is supposed to be doing. On a hub this is the button somebody
+   * reaches for when a phone has been put down and nothing is happening —
+   * and unlike on a phone, the screen never has to wait for it.
+   */
+  const out = view.legalActions?.find((a) => a.type === 'unstick');
+  if (out && !outcomes.length) {
+    row.push(button(out.label, () => handlers.onAct({ type: 'unstick' }), 'btn btn-quiet btn-big'));
+  }
+
+  dock.replaceChildren(...row);
 }
 
 /**

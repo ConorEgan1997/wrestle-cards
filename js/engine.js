@@ -174,6 +174,24 @@ export class GameEngine {
   }
 
   /**
+   * May one seat send an action on behalf of another?
+   *
+   * Only ever relevant where a device stands in for a seat that has none —
+   * the shared screen. The ruleset decides where the line falls, because
+   * the line is about hidden information and the engine does not know what
+   * is hidden. With no ruleset opinion, nobody acts for anybody.
+   */
+  mayActFor(actorId, targetId, action) {
+    if (actorId === targetId) return true;
+    return !!this.rules.mayActFor?.(
+      this.state,
+      this.getPlayer(actorId),
+      this.getPlayer(targetId),
+      action,
+    );
+  }
+
+  /**
    * Mark a player disconnected. We deliberately do not remove them mid-game:
    * their hand must stay put so they can rejoin with the same identity.
    */
@@ -201,6 +219,28 @@ export class GameEngine {
   setReady(id, ready) {
     const player = this.getPlayer(id);
     if (player) player.ready = !!ready;
+  }
+
+  /**
+   * Turn a seat into the screen, or back into a player.
+   *
+   * Lobby only. Mid-game it would either conjure a hand out of nothing or
+   * strip one somebody is holding, and both of those are worse than making
+   * the table decide before the first bell. A screen counts as ready: there
+   * is nobody sitting at it to press the button.
+   */
+  setScreen(id, screen) {
+    if (this.state.phase !== 'lobby') {
+      throw new IllegalAction('The hub has to be chosen before the game starts');
+    }
+    const player = this.getPlayer(id);
+    if (!player) return null;
+    player.screen = !!screen;
+    if (player.screen) player.ready = true;
+    this.log(player.screen
+      ? `${player.name} is the big screen`
+      : `${player.name} is playing after all`);
+    return player;
   }
 
   /**

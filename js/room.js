@@ -146,6 +146,16 @@ export class HostRoom {
     this.#publish();
   }
 
+  /** Flip this device between being the big screen and being a player. */
+  setScreen(screen) {
+    try {
+      this.engine.setScreen(this.playerId, screen);
+    } catch (err) {
+      this.onError?.(err.message);
+    }
+    this.#publish();
+  }
+
   rename(name) {
     const player = this.engine.getPlayer(this.playerId);
     if (player) player.name = name;
@@ -182,18 +192,18 @@ export class HostRoom {
   }
 
   /**
-   * Take an action on behalf of a seat with no phone behind it.
+   * Take an action on behalf of another seat.
    *
-   * This is how a shared screen plays: the seats round the table have no
-   * device of their own, so the screen acts as each of them in turn. It is
-   * deliberately limited to seats marked `local` — the host cannot reach
-   * over and play somebody's actual phone, which would make every hidden
-   * hand in the game a lie.
+   * This is how a shared screen plays. A seat with no phone hands over
+   * everything, because the screen is its only way to act at all. A seat
+   * with a phone hands over only what the room can already see — drawing,
+   * resolving the face-up Mini Game, the clock. The ruleset draws that line
+   * (see mayActFor); without it the screen could play somebody's hand, and
+   * every hidden hand in the game would be a lie.
    */
   actAs(playerId, action) {
-    const player = this.engine.getPlayer(playerId);
-    if (!player?.local) {
-      this.onError?.('That seat is being played from a phone');
+    if (!this.engine.mayActFor(this.playerId, playerId, action)) {
+      this.onError?.('That is not this screen\'s to play');
       return;
     }
     const result = this.engine.dispatch(playerId, action);
@@ -288,7 +298,14 @@ export class HostRoom {
     try {
       const player = typeof msg.claim === 'string'
         ? this.#claimSeat(msg.claim, token, sanitiseName(msg.name))
-        : this.engine.addPlayer({ id: token, name: sanitiseName(msg.name) });
+        : this.engine.addPlayer({
+          id: token,
+          name: sanitiseName(msg.name),
+          // A spare laptop or a telly joining as the table rather than a
+          // player. Harmless to take on trust: a screen is dealt nothing
+          // and takes no turn, so claiming to be one only gives things up.
+          screen: msg.screen === true,
+        });
       this.seats.set(connId, player.id);
       this.transport.send(connId, {
         t: 'welcome',
@@ -370,11 +387,18 @@ export class ClientRoom {
     });
   }
 
-  async join(code, name) {
+  /**
+   * Join a table.
+   *
+   * `screen: true` joins as the big screen rather than as a player — a spare
+   * laptop or a telly that shows the game to the room and can move it on,
+   * but is dealt nothing and never takes a turn.
+   */
+  async join(code, name, { screen = false } = {}) {
     this.code = code;
     await this.transport.connect(code);
     this.playerId = this.token ?? myIdentity().token;
-    this.transport.send({ t: 'join', token: this.playerId, name });
+    this.transport.send({ t: 'join', token: this.playerId, name, screen });
   }
 
   setReady(ready) {

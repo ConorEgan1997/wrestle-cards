@@ -52,6 +52,11 @@ function init() {
   $('btn-local-start').addEventListener('click', startLocal);
   $('btn-local-back').addEventListener('click', () => leaveRoom());
 
+  $('input-hub').addEventListener('change', (event) => {
+    isScreen = event.target.checked;
+    room?.setScreen(isScreen);
+  });
+
   $('btn-copy').addEventListener('click', copyInvite);
   $('btn-ready').addEventListener('click', toggleReady);
   $('btn-start').addEventListener('click', () => room?.start());
@@ -236,8 +241,9 @@ async function joinTable(rawCode) {
       onClosed: leaveRoom,
       onChat: ({ from, text: body }) => toast(`${from}: ${body}`),
     });
-    await room.join(code, playerName());
-    room.setProfile({ wrestler: enteredWrestler() });
+    isScreen = $('input-join-screen').checked;
+    await room.join(code, playerName(), { screen: isScreen });
+    if (!isScreen) room.setProfile({ wrestler: enteredWrestler() });
     showScreen('lobby');
   } catch (err) {
     room = null;
@@ -297,6 +303,22 @@ function onView(next) {
 
   if (next.phase === 'lobby') {
     showScreen('lobby');
+
+    /*
+     * Only the host is offered the switch. Anyone else who wants to be the
+     * screen says so when they join — by then the host has already dealt
+     * them into the lobby as a player, and flipping that from the far end
+     * is more moving parts than the choice deserves.
+     */
+    const hub = $('hub-toggle');
+    hub.hidden = !room?.isHost;
+    $('input-hub').checked = !!next.you?.screen;
+    isScreen = !!next.you?.screen;
+
+    // A screen has no wrestler and nothing to be ready about.
+    $('input-wrestler-lobby').parentElement.hidden = isScreen;
+    $('btn-ready').hidden = isScreen;
+
     if ($('input-wrestler-lobby').value !== (next.you?.wrestler ?? '')) {
       $('input-wrestler-lobby').value = next.you?.wrestler ?? '';
     }

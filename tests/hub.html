@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Everything resolves as if we were the real page, so card images and
+         module paths work unchanged. -->
+    <base href="../" />
+    <title>Card Table — hub harness</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!--
+      A hub night in one tab: a screen in the middle of the table and three
+      players on their own phones, over the loopback transport, rendered
+      through the real UI.
+
+      This page renders the *screen's* view — what the room is looking at —
+      which is the thing worth eyeballing and the thing worth screenshotting.
+      The players' views are built too, and checked, because the whole point
+      of a hub is that it shows the room everything except the one thing it
+      must never show: anybody's hand.
+
+      Open it in a browser to see the hub without needing four devices; the
+      Playwright test reads window.__hub. ?turns=N plays that many.
+    -->
+    <pre id="result" style="padding: 12px; font: 12px ui-monospace, monospace">running…</pre>
+    <div id="stage"></div>
+
+    <script type="module">
+      import { HostRoom, ClientRoom } from './js/room.js';
+      import { LoopHost, LoopClient } from './js/net.js';
+      import { loadDeck, eventCardOptions } from './js/rules/index.js';
+      import {
+        renderGame, renderLobby, syncClock, showScreen, tickCountdowns, watchDock,
+        fillCardList, renderSettings,
+      } from './js/ui.js';
+      import { SETTINGS_SCHEMA } from './js/rules/wrestling.js';
+
+      const settle = () => new Promise((r) => setTimeout(r, 12));
+      const checks = [];
+      const check = (name, pass, detail = '') => checks.push({ name, pass, detail: String(detail) });
+
+      try {
+        const html = await (await fetch('index.html')).text();
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        parsed.querySelectorAll('script').forEach((s) => s.remove());
+        document.getElementById('stage').append(...parsed.body.children);
+
+        await loadDeck('cards/deck.json');
+        fillCardList(eventCardOptions());
+        watchDock();
+
+        /* ---------------------- the screen ---------------------- */
+
+        let hubView = null;
+        const hub = new HostRoom({
+          rulesetId: 'wrestling',
+          Transport: LoopHost,
+          token: 'test-telly',
+          onUpdate: (view) => {
+            hubView = view;
+            syncClock(view.now);
+            showScreen(view.phase === 'lobby' ? 'lobby' : 'game');
+            if (view.phase === 'lobby') {
+              renderLobby(view, { code: hub.code, isHost: true, canStart: hub.canStart() });
+              renderSettings(view, SETTINGS_SCHEMA, { isHost: true, onChange: () => {} });
+            } else {
+              renderGame(view, {
+                onAct: (a) => hub.act(a),
+                onSeatAct: (id, a) => hub.actAs(id, a),
+                onOutcome: () => {},
+                onShowCard: () => {},
+                onShowPlayer: () => {},
+              });
+            }
+          },
+          onError: (msg) => check('hub error', false, msg),
+        });
+
+        const code = await hub.open('The telly', { screen: true });
+        check('the screen opened a table', /^[A-Z0-9]{4}$/.test(code), code);
+        check('and is a screen, not a player', hubView.you.screen === true);
+
+        /* ---------------------- the phones ---------------------- */
+
+        const guests = ['Ann', 'Bob', 'Cat'].map((name) => {
+          const guest = { name, view: null, errors: [] };
+          guest.room = new ClientRoom({
+            Transport: LoopClient,
+            token: `test-${name.toLowerCase()}`,
+            onUpdate: (view) => (guest.view = view),
+            onError: (msg) => guest.errors.push(msg),
+            onClosed: () => {},
+          });
+          return guest;
+        });
+        for (const guest of guests) {
+          await guest.room.join(code, guest.name);
+          guest.room.setProfile({ wrestler: `${guest.name}'s pick` });
+          guest.room.setReady(true);
+        }
+        await settle();
+
+        check('three players and a screen', hubView.players.length === 4);
+        check('the screen counts for nothing towards starting', hub.canStart());
+        check(
+          'the lobby says which one is the telly',
+          document.querySelector('.tag-screen')?.textContent === 'Big screen',
+          document.querySelector('.tag-screen')?.textContent,
+        );
+
+        hub.start();
+        await settle();
+
+        check('the night is on', hubView.phase === 'playing', hubView.phase);
+        check('the screen was dealt nothing', hubView.you.hand.length === 0);
+        check('the players were dealt in', guests.every((g) => g.view.you.hand.length === 4));
+        check('the turn is on a player, not the screen',
+          hubView.turn !== hub.playerId, hubView.turn);
+
+        /* ------------- what the screen must never show ------------- */
+
+        const onScreen = () => document.getElementById('stage').innerHTML;
+        const everyCard = guests.flatMap((g) => g.view.you.hand.map((c) => c.id));
+        check('sanity: the players are holding cards', everyCard.length === 12, everyCard.length);
+        check(
+          'no hand reaches the screen, even in the view it was sent',
+          !everyCard.some((id) => JSON.stringify(hubView).includes(id)),
+        );
+        check(
+          'and nothing of anyone’s hand is on the page',
+          !everyCard.some((id) => onScreen().includes(id)),
+        );
+        check(
+          'the screen has no hand strip of its own',
+          document.getElementById('hand-section').hidden,
+        );
+
+        /* --------------------- playing a night -------------------- */
+
+        const rooms = Object.fromEntries(guests.map((g) => [g.room.playerId, g.room]));
+        const turns = Number(new URLSearchParams(location.search).get('turns')) || 4;
+        let drawnByHub = 0;
+
+        for (let i = 0; i < turns && hubView.phase === 'playing'; i++) {
+          const seat = hubView.turn;
+
+          // The screen draws for whoever is up — that is the hub's whole job.
+          hub.actAs(seat, { type: 'draw' });
+          drawnByHub += 1;
+          await settle();
+
+          const outcome = (hubView.seatActions?.[seat] ?? []).find((a) => a.type === 'outcome');
+          if (outcome) {
+            const other = hubView.players.find((p) => !p.screen && p.id !== seat);
+            hub.actAs(seat, {
+              type: 'outcome',
+              index: outcome.index,
+              targets: outcome.needs === 0 ? undefined : [other.id],
+            });
+            await settle();
+          }
+
+          if (hubView.vote) {
+            for (const id of Object.keys(rooms)) {
+              rooms[id].act({ type: 'vote', targets: [guests[0].room.playerId] });
+            }
+            await settle();
+          }
+
+          // And it runs the clock, because the countdown is on the big screen.
+          for (const batch of [...new Set((hubView.orders ?? []).map((o) => o.batch))]) {
+            hub.act({ type: 'startBatch', batch });
+            hub.act({ type: 'finishBatch', batch });
+          }
+          await settle();
+
+          if (hubView.turn === seat) {
+            const out = hubView.legalActions.find((a) => a.type === 'unstick');
+            if (out) hub.act({ type: 'unstick' });
+          }
+          await settle();
+        }
+
+        check('the screen drew every turn', drawnByHub === turns, drawnByHub);
+        check('the pile went down', hubView.deckCount === 430 - turns, hubView.deckCount);
+        check('and somebody was made to drink',
+          hubView.players.some((p) => p.seconds || p.downs || p.shots));
+        check('no errors reached the phones', guests.every((g) => !g.errors.length),
+          guests.flatMap((g) => g.errors).join('; '));
+
+        /* ------------- a card played at somebody, face down ------------- */
+
+        const ann = guests[0];
+        const target = guests[1];
+        const card = ann.view.you.hand[0];
+        ann.room.act({
+          type: 'playEvent', cardId: card.id, index: 0, targets: [target.room.playerId],
+        });
+        await settle();
+
+        check('the screen shows a card is face down', !!hubView.pending);
+        check('it says who played it and who at',
+          hubView.pending?.byName === 'Ann'
+          && hubView.pending.targets.includes(target.room.playerId));
+        check('but not which card it is', !JSON.stringify(hubView.pending).includes(card.id));
+        check(
+          'the banner is on the page for the room to read',
+          (document.querySelector('.pending-text')?.textContent ?? '').includes('Ann'),
+          document.querySelector('.pending-text')?.textContent?.slice(0, 80),
+        );
+        check(
+          'the screen is not offered the guess — that is Bob’s call',
+          !(hubView.seatActions?.[target.room.playerId] ?? [])
+            .some((a) => a.type === 'guessCard' || a.type === 'acceptCard'),
+        );
+        check(
+          'the player it is aimed at can answer on their own phone',
+          target.view.legalActions.some((a) => a.type === 'guessCard'),
+        );
+
+        target.room.act({ type: 'acceptCard' });
+        await settle();
+        check('and once answered the room sees what it was',
+          hubView.lastPlay?.card?.id === card.id, hubView.lastPlay?.card?.title);
+
+        setInterval(() => tickCountdowns(hubView), 100);
+        window.__hubRoom = hub;
+        window.__guests = guests;
+      } catch (err) {
+        check('the hub harness ran without throwing', false, err.stack || String(err));
+      }
+
+      const failed = checks.filter((c) => !c.pass);
+      document.getElementById('result').textContent = JSON.stringify(
+        { ok: failed.length === 0, failed: failed.length, checks },
+        null,
+        1,
+      );
+      window.__hub = { ok: failed.length === 0, checks };
+    </script>
+  </body>
+</html>

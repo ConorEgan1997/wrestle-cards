@@ -414,6 +414,11 @@ input::placeholder {
   color: #fff;
 }
 
+.tag-screen {
+  background: #2b3a55;
+  color: #cfe0ff;
+}
+
 .tag-host {
   background: var(--gold);
   color: #17140c;
@@ -1773,5 +1778,116 @@ input::placeholder {
      mid-game — it would push the card off a 720p screen. */
   .is-screen .log-box {
     display: none;
+  }
+}
+
+
+/* A checkbox with an explanation under it — used for the two hub options,
+   where the label alone would not say nearly enough. */
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  margin: 10px 0;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.check input {
+  margin: 2px 0 0;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--gold);
+}
+
+.check strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.check .note {
+  margin-top: 2px;
+}
+
+
+/* ------------------- the hub's moment of theatre ------------------- *
+ *
+ * On a phone the face-down card is a banner you glance at and the splash is
+ * a card-sized thing in the middle of the screen. On the hub they are the
+ * event: the whole room is looking at this display, and "Conor played a
+ * card at Jude — challenge or not" is the question the night turns on.
+ * ------------------------------------------------------------------- */
+
+.is-screen .pending-banner {
+  padding: 22px 28px;
+  gap: 22px;
+  border-width: 2px;
+  box-shadow: 0 0 60px rgb(140 90 220 / 0.25);
+}
+
+.is-screen .pending-back {
+  width: 72px;
+  height: 98px;
+  border-radius: 8px;
+}
+
+.is-screen .pending-text {
+  font-size: clamp(1.2rem, 2.4vw, 2rem);
+  line-height: 1.2;
+}
+
+.is-screen .pending-text .sub {
+  font-size: clamp(0.95rem, 1.5vw, 1.25rem);
+  margin-top: 6px;
+}
+
+/* The reveal. The card is the point, so it gets the height of the screen
+   and its own art ratio rather than a fixed thumbnail width. */
+/* The card on the left, what happened on the right, both centred on it. */
+.is-screen .flash-inner {
+  width: 100%;
+  max-width: min(1100px, 92vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 44px;
+  text-align: left;
+}
+
+.is-screen .flash-inner img {
+  flex: none;
+  width: auto;
+  height: min(72vh, 620px);
+  margin-bottom: 0;
+}
+
+.is-screen .flash-who {
+  font-size: clamp(1rem, 1.8vw, 1.5rem);
+}
+
+.is-screen .flash-card {
+  font-size: clamp(2.4rem, 5.5vw, 4.5rem);
+}
+
+.is-screen .flash-result {
+  margin-top: 14px;
+  font-size: clamp(1.1rem, 2.2vw, 1.9rem);
+}
+
+/* Portrait screens keep the stacked arrangement — a tall monitor has the
+   height for it and no width to put the words beside the card. */
+@media (max-aspect-ratio: 1 / 1) {
+  .is-screen .flash-inner {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .is-screen .flash-inner img {
+    height: min(52vh, 480px);
   }
 }

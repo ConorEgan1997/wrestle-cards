@@ -1551,6 +1551,164 @@ test('a claimed seat can play a card like anybody else', () => {
   assert.ok(engine.state.vars.pending || engine.state.vars.lastPlay, 'the card was played');
 });
 
+/* --------------------------------- the hub ---------------------------- */
+
+/**
+ * A table with a screen in the middle of it and everyone on their own phone.
+ * The screen is a seat that runs the table without sitting at it.
+ */
+function hubTable(names = ['Ann', 'Bob', 'Cat'], settings) {
+  const engine = new GameEngine(wrestling, { seed: 7 });
+  engine.addPlayer({ id: 'tv', name: 'The telly', isHost: true, screen: true });
+  names.forEach((name, i) => {
+    engine.addPlayer({ id: `p${i}`, name });
+    engine.setReady(`p${i}`, true);
+  });
+  if (settings) engine.setSettings(settings);
+  engine.start();
+  return engine;
+}
+
+test('a screen is dealt nothing and never takes a turn', () => {
+  const engine = hubTable();
+  const tv = engine.getPlayer('tv');
+
+  assert.deepEqual(tv.hand, []);
+  assert.notEqual(engine.state.turn, 'tv', 'the turn starts on a player');
+
+  // Round the table twice: it must never land on the screen.
+  const seen = new Set();
+  for (let i = 0; i < 8; i += 1) {
+    seen.add(engine.state.turn);
+    engine.advanceTurn();
+  }
+  assert.ok(!seen.has('tv'), 'the screen is not in the turn order');
+  assert.deepEqual([...seen].sort(), ['p0', 'p1', 'p2']);
+});
+
+test('a screen is not ranked at the end of the night', () => {
+  const engine = hubTable();
+  engine.getPlayer('p1').seconds = 40;
+  ok(engine.dispatch('tv', { type: 'endGame' }));
+
+  const ids = engine.state.result.scores.map((sc) => sc.id);
+  assert.ok(!ids.includes('tv'), 'a device that drank nothing is not a winner');
+  assert.deepEqual(ids.sort(), ['p0', 'p1', 'p2']);
+});
+
+test('a table of one player and a screen is not a table', () => {
+  const engine = new GameEngine(wrestling, { seed: 2 });
+  engine.addPlayer({ id: 'tv', name: 'The telly', isHost: true, screen: true });
+  engine.addPlayer({ id: 'p0', name: 'Ann' });
+  engine.setReady('p0', true);
+
+  assert.equal(engine.canStart(), false, 'the screen does not count towards the minimum');
+  assert.throws(() => engine.start(), /at least/i);
+});
+
+test('the hub is told what each seat can do at the table', () => {
+  const engine = hubTable();
+  const seatActions = engine.viewFor('tv').seatActions;
+
+  assert.ok(seatActions, 'a screen gets them');
+  assert.deepEqual(Object.keys(seatActions).sort(), ['p0', 'p1', 'p2']);
+  assert.ok(
+    seatActions[engine.state.turn].some((a) => a.type === 'draw'),
+    'including the draw for whoever is up',
+  );
+  assert.equal(engine.viewFor('p0').seatActions, null, 'a phone gets none of this');
+});
+
+test('the hub is never handed somebody\'s cards', () => {
+  const engine = hubTable();
+  const seatActions = engine.viewFor('tv').seatActions;
+
+  for (const [id, actions] of Object.entries(seatActions)) {
+    assert.ok(engine.getPlayer(id).hand.length, `sanity: ${id} is holding cards`);
+    for (const action of actions) {
+      assert.ok(
+        !['playEvent', 'swapCard', 'guessCard', 'acceptCard'].includes(action.type),
+        `the hub was offered ${action.type} for ${id}`,
+      );
+    }
+  }
+  // And the cards themselves never reach it.
+  const serialised = JSON.stringify(engine.viewFor('tv'));
+  for (const player of engine.state.players) {
+    for (const card of player.hand) {
+      assert.ok(!serialised.includes(card.id), `${card.id} leaked to the screen`);
+    }
+  }
+});
+
+test('the hub can draw and resolve for whoever is up', () => {
+  const engine = hubTable();
+  const seat = engine.state.turn;
+
+  ok(engine.dispatch(seat, { type: 'draw' }));
+  assert.ok(engine.state.vars.current, 'the card is face up for the room');
+
+  const outcome = engine.legalActions(seat).find((a) => a.type === 'outcome');
+  const hubCanSee = engine.viewFor('tv').seatActions[seat]
+    .some((a) => a.type === 'outcome' && a.index === outcome.index);
+  assert.ok(hubCanSee, 'the Mini Game is public, so the hub may resolve it');
+});
+
+test('the hub can always move the night on and work the clock', () => {
+  const engine = hubTable();
+  const actions = engine.legalActions('tv').map((a) => a.type);
+
+  // No 45-second wait for the screen: it is the device the room turns to.
+  // Moving the turn on arrives as the unstick action, labelled for whatever
+  // is actually in the way — here, the player who hasn't drawn.
+  assert.ok(actions.includes('unstick'), 'the way out, straight away');
+  const out = engine.legalActions('tv').find((a) => a.type === 'unstick');
+  assert.match(out.label, /^Skip /, out.label);
+
+  const v = engine.state.vars;
+  v.orders.push({ id: 99, batch: 9, playerId: 'p1', from: 'p2', seconds: 5 });
+  assert.ok(
+    engine.legalActions('tv').some((a) => a.type === 'startBatch' && a.batch === 9),
+    'the countdown is on the big screen, so the big screen can start it',
+  );
+});
+
+test('the hub cannot guess a counter for somebody', () => {
+  const engine = hubTable();
+  giveCard(engine, 'p0', 'event-24');
+  ok(engine.dispatch('p0', { type: 'playEvent', cardId: 'event-24', index: 0, targets: ['p1'] }));
+
+  const forP1 = engine.viewFor('tv').seatActions.p1.map((a) => a.type);
+  assert.ok(!forP1.includes('guessCard'), 'calling the card is p1\'s decision');
+  assert.ok(!forP1.includes('acceptCard'));
+  // But it can turn the card over if p1 has plainly gone — by whichever of
+  // the two routes it has (reveal as host, unstick otherwise).
+  const ways = engine.legalActions('tv').map((a) => a.type);
+  assert.ok(ways.includes('revealCard') || ways.includes('unstick'), ways.join(','));
+});
+
+test('the hub is chosen in the lobby and only in the lobby', () => {
+  const engine = new GameEngine(wrestling, { seed: 3 });
+  engine.addPlayer({ id: 'tv', name: 'Laptop', isHost: true });
+  ['p0', 'p1'].forEach((id, i) => {
+    engine.addPlayer({ id, name: `P${i}` });
+    engine.setReady(id, true);
+  });
+
+  const tv = engine.setScreen('tv', true);
+  assert.equal(tv.screen, true);
+  assert.equal(tv.ready, true, 'there is nobody at a screen to press ready');
+  assert.equal(engine.canStart(), true);
+
+  // And it can change its mind right up to the first bell.
+  engine.setScreen('tv', false);
+  assert.equal(engine.getPlayer('tv').screen, false);
+  engine.setScreen('tv', true);
+
+  engine.start();
+  assert.throws(() => engine.setScreen('tv', false), /before the game starts/i);
+});
+
 /* ------------------------------ helpers ------------------------------- */
 
 const ALL = JSON.parse(readFileSync(`${ROOT}cards/deck.json`, 'utf8'));

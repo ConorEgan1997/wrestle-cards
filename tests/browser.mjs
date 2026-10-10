@@ -147,6 +147,28 @@ try {
     record('harness: and pressing it moves play on', moved !== stalled.turn, moved);
   }
 
+  /* ------------------- 1b. the hub, through the UI ---------------------- */
+
+  /*
+   * A screen in the middle of the table and three phones round it, driven
+   * through the real room protocol and rendered by the real UI. The checks
+   * that matter are the ones about what the hub is NOT shown: it is the one
+   * device everybody can see.
+   */
+  const hubPage = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const hubErrors = [];
+  hubPage.on('pageerror', (err) => hubErrors.push(err.message));
+  await hubPage.goto(`${BASE}/tests/hub.html`);
+  try {
+    await hubPage.waitForFunction(() => window.__hub, null, { timeout: 20000 });
+    const outcome = await hubPage.evaluate(() => window.__hub);
+    for (const check of outcome.checks) record(`hub: ${check.name}`, check.pass, check.detail);
+    record('hub: no uncaught errors', hubErrors.length === 0, hubErrors.join('; '));
+  } catch {
+    record('hub: finished at all', false, hubErrors.join('; ') || 'timed out with no error');
+  }
+  await hubPage.close();
+
   /* ---------------- 1c. countering a card, through the UI ---------------- */
   if (harnessRan) {
   // Bob plays a card at Ann (the host, whose screen the harness renders).
@@ -224,7 +246,16 @@ try {
   const stake = await harness.evaluate(async () => {
     const host = window.__host;
     const bob = window.__guests[0].room;
-    const card = host.engine.getPlayer(bob.playerId).hand[0];
+    /*
+     * A specific card, not whatever Bob happens to be holding. Plenty of the
+     * 156 holdable cards resolve to no drink at all — a tag partner, a house
+     * rule — and this check is about the size of a drink and what botching
+     * does to it, so it needs a card that actually hands one out. Card 24 is
+     * Heel Turn: three seconds, on somebody of your choosing.
+     */
+    const deck = await (await fetch('/cards/deck.json')).json();
+    const card = structuredClone(deck.find((c) => c.id === 'event-24'));
+    host.engine.getPlayer(bob.playerId).hand[0] = card;
     bob.act({ type: 'playEvent', cardId: card.id, index: 0, targets: [host.playerId] });
     await new Promise((r) => setTimeout(r, 30));
     return host.engine.viewFor(host.playerId).pending.stake;

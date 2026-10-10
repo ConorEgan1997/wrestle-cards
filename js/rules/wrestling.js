@@ -662,6 +662,7 @@ export const wrestling = {
 
   dealIn: dealInSeat,
   reseat,
+  mayActFor,
 
   isGameOver(state) {
     if (!state.vars.ended) return null;
@@ -707,6 +708,8 @@ export const wrestling = {
         id: you.id,
         name: you.name,
         isHost: you.isHost,
+        screen: !!you.screen,
+        local: !!you.local,
         wrestler: you.wrestler,
         hand: clone(you.hand ?? []),
         seconds: you.seconds ?? 0,
@@ -750,18 +753,29 @@ export const wrestling = {
       // convenience for rendering and not a security boundary.
       legalActions: you && state.phase === 'playing' ? clone(wrestling.legalActions(state, you, ctx)) : [],
       /*
-       * A screen is shown what each seat around it can do, because it is the
-       * thing those seats act through — they have no phone of their own.
-       * Only seats still marked `local` are included: the moment somebody
-       * picks up a phone, their options are theirs and the screen stops
-       * being told about them, which is what keeps a hand hidden.
+       * What the screen may do on behalf of the seats around it.
+       *
+       * A seat with no phone hands over everything: the screen is the only
+       * way it can act at all. A seat with a phone hands over only what the
+       * whole room can already see — drawing, resolving the Mini Game that
+       * is face up on the table, moving the turn on, working the clock. The
+       * screen is never given playEvent or swapCard for those seats, because
+       * that is somebody's hidden hand and the screen is the one device
+       * everyone is looking at.
+       *
+       * This is what "the hub has full control" has to mean in a game built
+       * on hidden information: control of the table, not of the players.
        */
       screen: !!you?.screen,
       seatActions: you?.screen && state.phase === 'playing'
         ? Object.fromEntries(
           state.players
-            .filter((p) => p.local && !p.screen)
-            .map((p) => [p.id, clone(wrestling.legalActions(state, p, ctx))]),
+            .filter((p) => !p.screen)
+            .map((p) => [
+              p.id,
+              clone(wrestling.legalActions(state, p, ctx)
+                .filter((a) => p.local || PUBLIC_ACTIONS.has(a.type))),
+            ]),
         )
         : null,
       log: state.log.slice(-40),
@@ -844,7 +858,9 @@ function blockedSince(state) {
  * precisely what the rest of the rules are careful not to allow.
  */
 function mayUnstick(state, player, now = Date.now()) {
-  if (player.isHost) return true;
+  // The screen waits for nobody: it is the device the room turns to when
+  // nothing is happening, and it has no hand to gain by moving things on.
+  if (player.isHost || player.screen) return true;
   switch (blockedBy(state)) {
     case 'vote':
       // The vote is on everyone, so nobody owns it — only the clock decides.
@@ -897,7 +913,9 @@ function blockedBy(state) {
  * phone that can clear it.
  */
 function mayControl(state, orders, player) {
-  if (player.isHost) return true;
+  // The countdown is the thing the room is looking at, so the screen showing
+  // it can always run it.
+  if (player.isHost || player.screen) return true;
   if (orders.some((o) => o.from === player.id || o.playerId === player.id)) return true;
   const owners = new Set(orders.flatMap((o) => [o.from, o.playerId]));
   const live = state.players.filter(
@@ -915,7 +933,7 @@ function mayControl(state, orders, player) {
  * off, because otherwise one closed laptop ends the game for everyone.
  */
 function mayEndTurn(state, player) {
-  if (state.turn === player.id || player.isHost) return true;
+  if (state.turn === player.id || player.isHost || player.screen) return true;
   const holder = state.players.find((p) => p.id === state.turn);
   return !holder || !holder.connected;
 }
@@ -1261,6 +1279,43 @@ function reseat(state, oldId, newId) {
   // House rules are recorded against a name, not an id, so they need nothing
   // here — the name goes with the seat.
 }
+
+/**
+ * May this device send this action on behalf of that seat?
+ *
+ * Two cases, and the difference between them is the whole hidden-information
+ * story of the game:
+ *
+ *   - a seat with no phone has no other way to act at all, so the screen it
+ *     sits at does everything for it;
+ *   - a seat with a phone hands the screen only what the room can already
+ *     see. The screen may draw for you, resolve the Mini Game lying face up
+ *     on the table, move your turn on and work the clock. It may not play
+ *     your cards or answer a challenge aimed at you.
+ *
+ * Anything else — one phone trying to act as another — is refused outright.
+ */
+function mayActFor(state, actor, target, action) {
+  if (!actor || !target) return false;
+  if (target.local) return true;
+  if (!actor.screen && !actor.isHost) return false;
+  if (!actor.screen) return false;
+  return PUBLIC_ACTIONS.has(action?.type);
+}
+
+/**
+ * The actions a screen may take for a player who has their own phone.
+ *
+ * Everything here concerns the table rather than a hand: the Mini Game is
+ * face up, the turn order is public, the clock is on every device anyway. A
+ * screen may also turn a face-down card over and settle a vote, because
+ * those are the two states that freeze the whole room — but it cannot guess
+ * for somebody, which would be playing their counter for them.
+ */
+const PUBLIC_ACTIONS = new Set([
+  'draw', 'outcome', 'endTurn', 'unstick', 'revealCard',
+  'startBatch', 'finishBatch', 'startOrder', 'finishOrder', 'give',
+]);
 
 /** Read a game option, falling back to the default if it was never set. */
 function settingOf(state, key) {

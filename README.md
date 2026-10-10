@@ -30,6 +30,9 @@ There are two ways to play it:
 - **A phone each.** One player starts a table and gets a four-letter code;
   everyone else joins from their own phone and holds a hand of cards they can
   play, counter and bluff with. This is the full game.
+- **A phone each, plus a big screen.** The same game with a telly or a laptop
+  in the middle of the table showing the room what's happening — the card on
+  the table, who played what at whom, and the countdown. Jackbox-style.
 
 They are the same night, not two apps, and you can start with the first and
 move to the second: anyone who wants a hand joins with the code **mid-game**
@@ -101,6 +104,36 @@ A room code still appears if the broker answers, so phones can join later, but
 **Start never waits on it**: a dead broker costs you the phones and nothing
 else. The screen itself is not a player — it deals and displays, takes no turn,
 and never shows up in the tally.
+
+### The big screen
+
+Any device can be the hub. The host gets a **Use this screen as the hub**
+switch in the lobby; anyone else joins with the code and ticks **I'm the big
+screen**. Either way that device stops being a player: dealt nothing, never
+takes a turn, never ranked at the end.
+
+What the room sees on it: whose go it is, the Mini Game at full height with
+its rule beside it, the player strip with everyone's tally, the countdown
+filling the screen when a drink is dealt out, and — the bit that makes it
+worth having — **"Ann played a card face down at Bob · 3 seconds at stake ·
+waiting on Bob"**, then the card itself once Bob has had his say.
+
+The hub can also move the night on: draw for whoever is up, resolve the Mini
+Game lying face up, run the clock, and skip a player who has put their phone
+down — with no 45-second wait, because it's the device everyone turns to when
+nothing is happening.
+
+**What it cannot do is touch a hand.** It is never offered "play this card",
+"bin this card", or the guess box, and no card in anybody's hand appears
+anywhere in the view it is sent — there's a test that serialises the hub's
+whole view and fails if one does. That matters more here than anywhere else
+in the app, because the hub is the one device the entire room can see.
+Deciding whether to challenge stays with the person being challenged; that's
+the decision the game is built on.
+
+So "full control" means control of the **table**, not of the players. In a
+game built on hidden information there isn't an honest version of the other
+thing.
 
 ### Tonight's rules
 
@@ -368,6 +401,7 @@ tools/verify-cards.py     checks every image shows the card its name claims
 tools/build-deck.py       rebuilds deck.json from the transcribed card text
 tools/dev-server.mjs      zero-dependency static server
 tests/                    unit, protocol, deck and browser tests
+tests/hub.html            a hub and three phones in one tab, to look at
 ```
 
 The engine knows about decks, hands, turn order and hidden information, and
@@ -451,10 +485,15 @@ Run it after any change to the sheets.
 ## Tests
 
 ```bash
-npm test              # 140 unit, protocol and deck tests
-npm run test:browser  # 100 checks in a real browser (needs playwright)
+npm test              # 149 unit, protocol and deck tests
+npm run test:browser  # 125 checks in a real browser (needs playwright)
 npm run verify:cards  # every image shows the card its filename claims
 ```
+
+`tests/hub.html` is the same idea for the big screen: a hub and three phones
+in one tab, rendering the hub's view, with the checks that matter being the
+ones about what it is *not* shown. Open it to see the hub without finding
+four devices.
 
 `tests/harness.html` plays a three-player night in a single tab over the
 loopback transport and renders it through the real UI — it pulls its markup out
